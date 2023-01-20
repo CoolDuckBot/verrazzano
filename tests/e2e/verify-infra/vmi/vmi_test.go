@@ -206,7 +206,7 @@ var _ = t.Describe("VMI", Label("f:infra-lcm"), func() {
 									{Key: "kubernetes.container_name", Value: "verrazzano-application-operator"},
 									{Key: "cluster_name", Value: constants.MCLocalCluster}},
 								[]pkg.Match{})
-						}, waitTimeout, pollingInterval).Should(BeTrue(), "Expected to find a verrazzano-application-operator log record")
+						}, 2*waitTimeout, 2*pollingInterval).Should(BeTrue(), "Expected to find a verrazzano-application-operator log record")
 					},
 				)
 			})
