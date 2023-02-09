@@ -37,7 +37,7 @@ pipeline {
             image "${RUNNER_DOCKER_IMAGE_1_4}"
             args "${RUNNER_DOCKER_ARGS_1_4} --cap-add=NET_ADMIN"
             registryUrl "${RUNNER_DOCKER_REGISTRY_URL}"
-            label "${agentLabel}"
+            label "blocker-large-1_4"
         }
     }
 

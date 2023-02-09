@@ -8,7 +8,7 @@ pipeline {
             args "${RUNNER_DOCKER_ARGS_1_4}"
             registryUrl "${RUNNER_DOCKER_REGISTRY_URL}"
             registryCredentialsId 'ocir-pull-and-push-account'
-            label 'small'
+            label 'blocker-large-1_4'
         }
     }
 
