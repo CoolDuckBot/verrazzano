@@ -108,3 +108,32 @@ if [ $? -eq 0 ]; then
 else
   echo "Failed to update the OKE private_workers_seclist"
 fi
+
+# Block docker.io and docker.com at the VCN level
+# Get the VCN resolver
+VCN_RESOLVER_ID=$(oci dns resolver list \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --display-name "${TF_VAR_label_prefix}-oke-vcn" \
+  | jq -r '.data[0].id')
+
+oci dns view create \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" \
+  --wait-for-state ACTIVE
+if [ $? -eq 0 ]; then
+  echo "Created docker blocker view"
+else
+  echo "Failed to create docker blocker view"
+fi
+
+BLOCKER_VIEW_ID=$(oci dns view get \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" \
+  | jq -r '.data[0].id')
+
+
+
+			- Create a "blocked" DNS private view (not protected)
+				- Create 2 private zones in that private view
+					- Add rule for "docker.io"
+					- Add rule for "docker.com"
