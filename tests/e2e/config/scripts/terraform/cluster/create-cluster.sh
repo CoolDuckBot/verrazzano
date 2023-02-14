@@ -112,11 +112,16 @@ fi
 # Block docker.io and docker.com at the VCN level
 # Get the VCN resolver
 VCN_RESOLVER_ID=$(oci dns resolver list \
+  --region=${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
-  --display-name "${TF_VAR_label_prefix}-oke-vcn" \
+  --display-name "${TF_VAR_label_prefix}-oke-vcn" --all \
   | jq -r '.data[0].id')
 
+echo "Resolver $VCN_RESOLVER_ID"
+
+# Create a "blocked" DNS private view (not protected)
 oci dns view create \
+  --region=${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" \
   --wait-for-state ACTIVE
@@ -126,14 +131,89 @@ else
   echo "Failed to create docker blocker view"
 fi
 
-BLOCKER_VIEW_ID=$(oci dns view get \
+BLOCKER_VIEW_ID=$(oci dns view list \
+  --region=${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
-  --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" \
+  --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" --all \
   | jq -r '.data[0].id')
 
+echo "Blocker view ID: $BLOCKER_VIEW_ID"
+
+# Create docker.io blocker private zone
+oci dns zone create \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-io-block-zone" \
+  --view-id $BLOCKER_VIEW_ID \
+  --zone-type PRIMARY \
+  --scope PRIVATE \
+  --wait-for-state ACTIVE
+if [ $? -eq 0 ]; then
+  echo "Created docker.io blocker private zone"
+else
+  echo "Failed to create docker.io blocker private zone"
+fi
+
+DOCKER_IO_ZONE_ID=$(oci dns zone list \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-io-block-zone" --all \
+  | jq -r '.data[0].id')
+
+echo "docker.io zone ID: $DOCKER_IO_ZONE_ID"
+
+# Add docker.io A record to 127.0.0.1
+oci dns record zone patch \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-io-block-zone" \
+  --view-id $BLOCKER_VIEW_ID \
+  --zone-type PRIMARY \
+  --scope PRIVATE \
+  --items '[ {"domain": "*.docker.io", "isProtected": false, "operation": "ADD", "rdata": "127.0.0.1", "rtype": "A" } ]' \
+  --wait-for-state ACTIVE
+if [ $? -eq 0 ]; then
+  echo "Added record for docker.io blocker private zone"
+else
+  echo "Failed to add record for docker.io blocker private zone"
+fi
 
 
-			- Create a "blocked" DNS private view (not protected)
-				- Create 2 private zones in that private view
-					- Add rule for "docker.io"
-					- Add rule for "docker.com"
+# Create docker.io blocker private zone
+oci dns zone create \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-com-block-zone" \
+  --view-id $BLOCKER_VIEW_ID \
+  --zone-type PRIMARY \
+  --scope PRIVATE \
+  --wait-for-state ACTIVE
+if [ $? -eq 0 ]; then
+  echo "Created docker.com blocker private zone"
+else
+  echo "Failed to create docker.com blocker private zone"
+fi
+
+DOCKER_COM_ZONE_ID=$(oci dns zone list \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-com-block-zone" --all \
+  | jq -r '.data[0].id')
+
+echo "docker.com zone ID: $DOCKER_COM_ZONE_ID"
+
+# Add docker.io A record to 127.0.0.1
+oci dns record zone patch \
+  --region=${TF_VAR_region}  \
+  --compartment-id "${TF_VAR_compartment_id}" \
+  --name "${TF_VAR_label_prefix}-oke-docker-io-block-zone" \
+  --view-id $BLOCKER_VIEW_ID \
+  --zone-type PRIMARY \
+  --scope PRIVATE \
+  --items '[ {"domain": "*.docker.com", "isProtected": false, "operation": "ADD", "rdata": "127.0.0.1", "rtype": "A" } ]' \
+  --wait-for-state ACTIVE
+if [ $? -eq 0 ]; then
+  echo "Added record for docker.io blocker private zone"
+else
+  echo "Failed to add record for docker.io blocker private zone"
+fi
