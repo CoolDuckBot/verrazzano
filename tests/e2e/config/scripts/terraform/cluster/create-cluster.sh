@@ -48,7 +48,6 @@ then
   exit 1
 fi
 
-echo "updating OKE private_workers_seclist to allow pub_lb_subnet access to workers"
 
 # the script would return 0 even if it fails to update OKE private_workers_seclist
 # because the OKE still could work if it didn't hit the rate limiting
@@ -112,7 +111,7 @@ fi
 # Block docker.io and docker.com at the VCN level
 # Get the VCN resolver
 VCN_RESOLVER_ID=$(/usr/local/bin/oci dns resolver list \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --display-name "${TF_VAR_label_prefix}-oke-vcn" --all \
   | jq -r '.data[0].id')
@@ -121,7 +120,7 @@ echo "Resolver $VCN_RESOLVER_ID"
 
 # Create a "blocked" DNS private view (not protected)
 /usr/local/bin/oci dns view create \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" \
   --wait-for-state ACTIVE
@@ -132,16 +131,24 @@ else
 fi
 
 BLOCKER_VIEW_ID=$(/usr/local/bin/oci dns view list \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --display-name "${TF_VAR_label_prefix}-oke-docker-blocker-view" --all \
   | jq -r '.data[0].id')
 
 echo "Blocker view ID: $BLOCKER_VIEW_ID"
 
+
+/usr/local/bin/oci dns resolver update \
+  --region ${TF_VAR_region}  \
+  --force \
+  --resolver-id $VCN_RESOLVER_ID \
+  --attached-views "[ { \"viewId\": \"$BLOCKER_VIEW_ID\" } ]"
+echo "Resolver updated to attach the view"
+
 # Create docker.io blocker private zone
 /usr/local/bin/oci dns zone create \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --name "docker.io" \
   --view-id $BLOCKER_VIEW_ID \
@@ -155,7 +162,7 @@ else
 fi
 
 DOCKER_IO_ZONE_ID=$(/usr/local/bin/oci dns zone list \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --name "docker.io" --all \
   | jq -r '.data[0].id')
@@ -164,7 +171,7 @@ echo "docker.io zone ID: $DOCKER_IO_ZONE_ID"
 
 # Add docker.io A record to 127.0.0.1
 /usr/local/bin/oci dns record zone patch \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --zone-name-or-id "docker.io" \
   --view-id $BLOCKER_VIEW_ID \
@@ -179,7 +186,7 @@ fi
 
 # Create docker.io blocker private zone
 /usr/local/bin/oci dns zone create \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --name "docker.com" \
   --view-id $BLOCKER_VIEW_ID \
@@ -193,7 +200,7 @@ else
 fi
 
 DOCKER_COM_ZONE_ID=$(/usr/local/bin/oci dns zone list \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --name "docker.com" --all \
   | jq -r '.data[0].id')
@@ -202,7 +209,7 @@ echo "docker.com zone ID: $DOCKER_COM_ZONE_ID"
 
 # Add docker.io A record to 127.0.0.1
 /usr/local/bin/oci dns record zone patch \
-  --region=${TF_VAR_region}  \
+  --region ${TF_VAR_region}  \
   --compartment-id "${TF_VAR_compartment_id}" \
   --zone-name-or-id "docker.com" \
   --view-id $BLOCKER_VIEW_ID \
