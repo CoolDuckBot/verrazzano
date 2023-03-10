@@ -1,38 +1,48 @@
-// Copyright (c) 2022, Oracle and/or its affiliates.
+// Copyright (c) 2022, 2023, Oracle and/or its affiliates.
 // Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
 
 package rancher
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	osexec "os/exec"
+	"path"
 	"regexp"
 	"strings"
+	"text/template"
 
-	ctrlerrors "github.com/verrazzano/verrazzano/pkg/controller/errors"
-	"github.com/verrazzano/verrazzano/pkg/os"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
+	"github.com/verrazzano/verrazzano/pkg/bom"
 	"github.com/verrazzano/verrazzano/pkg/constants"
+	ctrlerrors "github.com/verrazzano/verrazzano/pkg/controller/errors"
 	"github.com/verrazzano/verrazzano/pkg/k8s/resource"
+	"github.com/verrazzano/verrazzano/pkg/k8sutil"
+	"github.com/verrazzano/verrazzano/pkg/os"
 	vzstring "github.com/verrazzano/verrazzano/pkg/string"
 	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/spi"
+	"github.com/verrazzano/verrazzano/platform-operator/internal/config"
 	"github.com/verrazzano/verrazzano/platform-operator/internal/monitor"
 	admv1 "k8s.io/api/admissionregistration/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var rancherSystemTool = "/usr/local/bin/system-tools"
-
 const (
-	webhookName      = "rancher.cattle.io"
-	controllerCMName = "cattle-controllers"
-	lockCMName       = "rancher-controller-lock"
-	rancherSysNS     = "management.cattle.io/system-namespace"
+	webhookName                  = "rancher.cattle.io"
+	controllerCMName             = "cattle-controllers"
+	lockCMName                   = "rancher-controller-lock"
+	rancherSysNS                 = "management.cattle.io/system-namespace"
+	rancherCleanupImage          = "rancher-cleanup"
+	defaultRancherCleanupJobYaml = "/verrazzano/platform-operator/thirdparty/manifests/rancher-cleanup/rancher-cleanup.yaml"
+	rancherCleanupJobName        = "cleanup-job"
+	rancherCleanupJobNamespace   = constants.VerrazzanoInstallNamespace
+	finalizerSubString           = ".cattle.io"
 )
 
 var rancherSystemNS = []string{
@@ -66,18 +76,32 @@ type postUninstallFuncSig func(ctx spi.ComponentContext) error
 
 var postUninstallFunc postUninstallFuncSig = invokeRancherSystemToolAndCleanup
 
+var rancherCleanupJobYamlPath = defaultRancherCleanupJobYaml
+
+// getCleanupJobYamlPath - get the path to the yaml to create the cleanup job
+func getCleanupJobYamlPath() string {
+	return rancherCleanupJobYamlPath
+}
+
+// setCleanupJobYamlPath - set the path to the yaml for creating the cleanup job.
+// Required for by unit tests.
+func setCleanupJobYamlPath(path string) {
+	rancherCleanupJobYamlPath = path
+}
+
 // postUninstall - Rancher component post-uninstall
 //
-// This uses the Rancher system tool for uninstall, which blocks the uninstallation process. So, we launch the
-// uninstall operation in a goroutine and requeue to check back later.
+// This uses the rancher-cleanup tool for uninstall. Launch the uninstall operation in a goroutine and requeue to check back later.
 // On subsequent callbacks, we check the status of the goroutine with the 'monitor' object, and postUninstall
-// returns or requeues accordingly.
+// returns or requeue accordingly.
 func postUninstall(ctx spi.ComponentContext, monitor monitor.BackgroundProcessMonitor) error {
-	if monitor.IsRunning() {
+	if monitor.IsCompleted() {
+		return nil
+	} else if monitor.IsRunning() {
 		// Check the result
 		succeeded, err := monitor.CheckResult()
 		if err != nil {
-			// Not finished yet, requeue
+			// Background goroutine is not finished yet, requeue
 			ctx.Log().Progress("Component Rancher waiting to finish post-uninstall in the background")
 			return err
 		}
@@ -85,19 +109,18 @@ func postUninstall(ctx spi.ComponentContext, monitor monitor.BackgroundProcessMo
 		monitor.Reset()
 		// If it's not finished running, requeue
 		if succeeded {
+			// Mark the monitor as completed.  Reconcile loop may call this function again
+			// and do not want to call forkPostUninstallFunc more than once.
+			monitor.SetCompleted()
 			return nil
 		}
-		// if we were unsuccessful, reset and drop through to try again
-		ctx.Log().Debug("Error during Rancher post-uninstall, retrying")
 	}
 
 	return forkPostUninstallFunc(ctx, monitor)
 }
 
-// forkPostUninstall - the Rancher uninstall system tool blocks, so fork it to the background
+// forkPostUninstall - fork uninstall install of Rancher
 func forkPostUninstall(ctx spi.ComponentContext, monitor monitor.BackgroundProcessMonitor) error {
-	ctx.Log().Debugf("Creating background post-uninstall goroutine for Rancher")
-
 	monitor.Run(
 		func() error {
 			return postUninstallFunc(ctx)
@@ -108,26 +131,19 @@ func forkPostUninstall(ctx spi.ComponentContext, monitor monitor.BackgroundProce
 }
 
 // invokeRancherSystemToolAndCleanup - responsible for the actual deletion of resources
-// This calls the Rancher uninstall tool, which blocks.
+// This calls the rancher-cleanup tool.
 func invokeRancherSystemToolAndCleanup(ctx spi.ComponentContext) error {
-	// List all the namespaces that need to be cleaned from Rancher components
-	nsList := corev1.NamespaceList{}
-	err := ctx.Client().List(context.TODO(), &nsList)
-	if err != nil {
-		return ctx.Log().ErrorfNewErr("Failed to list the Rancher namespaces: %v", err)
+	var err error
+	ctx.Log().Progress("Component Rancher background post-uninstall goroutine is running")
+
+	// Delete Rancher finalizers before running the rancher-cleanup job (to speed up the uninstall)
+	if err := deleteRancherFinalizers(ctx); err != nil {
+		return err
 	}
 
-	// For Rancher namespaces, run the system tools uninstaller
-	for i, ns := range nsList.Items {
-		if isRancherNamespace(&nsList.Items[i]) {
-			ctx.Log().Infof("Running the Rancher uninstall system tool for namespace %s", ns.Name)
-			args := []string{"remove", "-c", "/home/verrazzano/kubeconfig", "--namespace", ns.Name, "--force"}
-			cmd := osexec.Command(rancherSystemTool, args...) //nolint:gosec //#nosec G204
-			_, stdErr, err := os.DefaultRunner{}.Run(cmd)
-			if err != nil {
-				return ctx.Log().ErrorNewErr("Failed to run system tools for Rancher deletion: %s: %v", stdErr, err)
-			}
-		}
+	// Run the rancher-cleanup job
+	if err := runCleanupJob(ctx); err != nil {
+		return err
 	}
 
 	// Remove the Rancher webhooks
@@ -166,13 +182,148 @@ func invokeRancherSystemToolAndCleanup(ctx spi.ComponentContext) error {
 
 	crds := getCRDList(ctx)
 
+	// Delete finalizers not handled by the cleanup job
+	if err := deleteRancherFinalizers(ctx); err != nil {
+		return err
+	}
+
 	// Remove any Rancher custom resources that remain
 	removeCRs(ctx, crds)
 
 	// Remove any Rancher CRD finalizers that may be causing CRD deletion to hang
 	removeCRDFinalizers(ctx, crds)
 
+	// Delete the rancher-cleanup job
+	deleteCleanupJob(ctx)
+
 	return nil
+}
+
+// runCleanupJob - run the rancher-cleanup job
+func runCleanupJob(ctx spi.ComponentContext) error {
+	// Create the rancher-cleanup job if it does not already exist
+	job := &batchv1.Job{}
+	err := ctx.Client().Get(context.TODO(), types.NamespacedName{Namespace: rancherCleanupJobNamespace, Name: rancherCleanupJobName}, job)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			ctx.Log().Infof("Component %s created cleanup job %s/%s", ComponentName, rancherCleanupJobNamespace, rancherCleanupJobName)
+			return createCleanupJob(ctx)
+		}
+		return err
+	}
+
+	// Re-queue if the job has not completed
+	var jobComplete = false
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == batchv1.JobComplete {
+			jobComplete = true
+			break
+		}
+	}
+
+	if !jobComplete {
+		ctx.Log().Progressf("Component %s waiting for cleanup job to complete: %s/%s", ComponentName, job.Namespace, job.Name)
+		return ctrlerrors.RetryableError{}
+	}
+	ctx.Log().Progressf("Component %s job successfully completed: %s/%s", ComponentName, job.Namespace, job.Name)
+
+	return nil
+}
+
+// createCleanupJob - create the Rancher cleanup job
+func createCleanupJob(ctx spi.ComponentContext) error {
+	// Prepare the Yaml to create the rancher-cleanup job
+	jobYaml, err := parseCleanupJobTemplate()
+	if err != nil {
+		ctx.Log().ErrorfThrottled("Failed to create yaml for %s cleanup job: %v", rancherCleanupJobName, err)
+		return err
+	}
+
+	// Write to a temporary file
+	file, err := os.CreateTempFile("vz", jobYaml)
+	if err != nil {
+		ctx.Log().ErrorfThrottled("Failed to create Rancher cleanup temporary file for %s job: %v", rancherCleanupJobName, err)
+		return err
+	}
+	defer file.Close()
+
+	// Create the rancher-cleanup job
+	if err = k8sutil.NewYAMLApplier(ctx.Client(), "").ApplyF(file.Name()); err != nil {
+		return ctx.Log().ErrorfNewErr("Failed applying Yaml to create job %s/%s for component %s: %v", rancherCleanupJobNamespace, rancherCleanupJobName, ComponentName, err)
+	}
+	ctx.Log().Progressf("Component %s waiting for cleanup job %s/%s to start", ComponentName, rancherCleanupJobNamespace, rancherCleanupJobName)
+	return ctrlerrors.RetryableError{}
+}
+
+// deleteCleanupJob - delete the rancher-cleanup job. Do not return any errors,
+// it could cause the Rancher post-install to start all over
+func deleteCleanupJob(ctx spi.ComponentContext) {
+	// Prepare the Yaml to delete the rancher-cleanup job
+	jobYaml, err := parseCleanupJobTemplate()
+	if err != nil {
+		ctx.Log().ErrorfThrottled("Failed to create yaml for %s cleanup job: %v", rancherCleanupJobName, err)
+		return
+	}
+
+	// Write to a temporary file
+	file, err := os.CreateTempFile("vz", jobYaml)
+	if err != nil {
+		ctx.Log().ErrorfThrottled("Failed to create Rancher cleanup temporary file for %s job: %v", rancherCleanupJobName, err)
+		return
+	}
+	defer file.Close()
+
+	// Delete the rancher-cleanup job
+	if err = k8sutil.NewYAMLApplier(ctx.Client(), "").DeleteF(file.Name()); err != nil {
+		ctx.Log().Errorf("Failed applying Yaml to delete cleanup job %s/%s for component %s: %v", rancherCleanupJobNamespace, rancherCleanupJobName, ComponentName, err)
+	}
+}
+
+// parseCleanupJobTemplate - parse the rancher-cleanup yaml file using
+// information from the Verrazzano BOM
+func parseCleanupJobTemplate() ([]byte, error) {
+	// Obtain the fully built image strings
+	bomFile, err := bom.NewBom(config.GetDefaultBOMFilePath())
+	if err != nil {
+		return []byte{}, err
+	}
+	imageNames, err := bomFile.GetImageNameList(rancherImageSubcomponent)
+	if err != nil {
+		return []byte{}, err
+	}
+	cleanupImage := ""
+	for _, name := range imageNames {
+		if strings.Contains(name, rancherCleanupImage) {
+			cleanupImage = name
+		}
+	}
+	if len(cleanupImage) == 0 {
+		return []byte{}, fmt.Errorf("Failed to find the %s image in the BOM", rancherCleanupImage)
+	}
+
+	// Parse the template file
+	var jobTemplate *template.Template
+	if jobTemplate, err = template.New("cleanup-job").ParseFiles(getCleanupJobYamlPath()); err != nil {
+		return []byte{}, err
+	}
+
+	// Parse the filename from the path string, it will become the name of the parsed template
+	_, file := path.Split(getCleanupJobYamlPath())
+	if len(file) == 0 {
+		return []byte{}, fmt.Errorf("Failed to parse filename from path %s", getCleanupJobYamlPath())
+	}
+
+	// Apply the replacement parameters to the template
+	params := map[string]string{
+		"RANCHER_CLEANUP_IMAGE": cleanupImage,
+	}
+	var buf bytes.Buffer
+	err = jobTemplate.ExecuteTemplate(&buf, file, params)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // deleteWebhooks takes care of deleting the Webhook resources from Rancher
@@ -219,9 +370,9 @@ func getCRDList(ctx spi.ComponentContext) *v1.CustomResourceDefinitionList {
 
 // removeCRs deletes any remaining Rancher cattle.io custom resources
 func removeCRs(ctx spi.ComponentContext, crds *v1.CustomResourceDefinitionList) {
-	ctx.Log().Oncef("Removing Rancher custom resources")
+	ctx.Log().Progress("Removing Rancher custom resources")
 	for _, crd := range crds.Items {
-		if strings.HasSuffix(crd.Name, ".cattle.io") {
+		if strings.HasSuffix(crd.Name, finalizerSubString) {
 			for _, version := range crd.Spec.Versions {
 				rancherCRs := unstructured.UnstructuredList{}
 				rancherCRs.SetAPIVersion(fmt.Sprintf("%s/%s", crd.Spec.Group, version.Name))
@@ -251,7 +402,7 @@ func removeCRs(ctx spi.ComponentContext, crds *v1.CustomResourceDefinitionList) 
 func removeCRDFinalizers(ctx spi.ComponentContext, crds *v1.CustomResourceDefinitionList) {
 	var rancherDeletedCRDs []v1.CustomResourceDefinition
 	for _, crd := range crds.Items {
-		if strings.HasSuffix(crd.Name, ".cattle.io") && crd.DeletionTimestamp != nil && !crd.DeletionTimestamp.IsZero() {
+		if strings.Contains(crd.Name, finalizerSubString) && crd.DeletionTimestamp != nil && !crd.DeletionTimestamp.IsZero() {
 			rancherDeletedCRDs = append(rancherDeletedCRDs, crd)
 		}
 	}
@@ -377,7 +528,87 @@ func isRancherNamespace(ns *corev1.Namespace) bool {
 	return false
 }
 
-// setRancherSystemTool sets the Rancher system tool to an arbitrary command
-func setRancherSystemTool(cmd string) {
-	rancherSystemTool = cmd
+// deleteRancherFinalizers - delete Rancher finalizers on resources that the cleanup job
+// didn't catch
+func deleteRancherFinalizers(ctx spi.ComponentContext) error {
+
+	// Check the finalizers of all ClusterRoles
+	crList := rbacv1.ClusterRoleList{}
+	if err := ctx.Client().List(context.TODO(), &crList); err != nil {
+		ctx.Log().Errorf("Component %s failed to list ClusterRoles: %v", ComponentName, err)
+	}
+	for i, clusterRole := range crList.Items {
+		if err := removeFinalizer(ctx, &crList.Items[i], clusterRole.Finalizers); err != nil {
+			return err
+		}
+	}
+
+	// Check the finalizers of all ClusterRoleBindings
+	crbList := rbacv1.ClusterRoleBindingList{}
+	if err := ctx.Client().List(context.TODO(), &crbList); err != nil {
+		ctx.Log().Errorf("Component %s failed to list ClusterRoleBindings: %v", ComponentName, err)
+	}
+	for i, clusterRoleBinding := range crbList.Items {
+		if err := removeFinalizer(ctx, &crbList.Items[i], clusterRoleBinding.Finalizers); err != nil {
+			return err
+		}
+	}
+
+	// Check the finalizers of Roles and RoleBindings of all namespaces.  Rancher adds a finalizer
+	// to every one of them.
+	nsList := corev1.NamespaceList{}
+	if err := ctx.Client().List(context.TODO(), &nsList); err != nil {
+		ctx.Log().Errorf("Component %s failed to list Namespaces: %v", ComponentName, err)
+	}
+
+	for _, ns := range nsList.Items {
+		// Skip system namespace
+		if strings.HasPrefix(ns.Name, "kube-") {
+			continue
+		}
+		listOptions := client.ListOptions{Namespace: ns.Name}
+
+		// Check the finalizers of all RoleBindings
+		rbList := rbacv1.RoleBindingList{}
+		if err := ctx.Client().List(context.TODO(), &rbList, &listOptions); err != nil {
+			return err
+		}
+		for i, roleBinding := range rbList.Items {
+			if err := removeFinalizer(ctx, &rbList.Items[i], roleBinding.Finalizers); err != nil {
+				return err
+			}
+		}
+
+		// Check the finalizers of all Roles
+		roleList := rbacv1.RoleList{}
+		if err := ctx.Client().List(context.TODO(), &roleList, &listOptions); err != nil {
+			ctx.Log().Errorf("Component %s failed to list Roles: %v", ComponentName, err)
+		}
+		for i, role := range roleList.Items {
+			if err := removeFinalizer(ctx, &roleList.Items[i], role.Finalizers); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// removeFinalizer - remove finalizers from an object if one is owned by Rancher
+func removeFinalizer(ctx spi.ComponentContext, object client.Object, finalizers []string) error {
+	// If any of the finalizers contains a rancher one, remove them all
+	for _, finalizer := range finalizers {
+		if strings.Contains(finalizer, finalizerSubString) {
+			err := resource.Resource{
+				Name:      object.GetName(),
+				Namespace: object.GetNamespace(),
+				Client:    ctx.Client(),
+				Object:    object,
+				Log:       ctx.Log(),
+			}.RemoveFinalizers()
+			if err != nil {
+				return ctx.Log().ErrorfNewErr("Component %s failed to remove finalizers from %s/%s: %v", ComponentName, object.GetNamespace(), object.GetName(), err)
+			}
+		}
+	}
+	return nil
 }

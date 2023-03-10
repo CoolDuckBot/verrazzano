@@ -1,4 +1,4 @@
-// Copyright (c) 2022, Oracle and/or its affiliates.
+// Copyright (c) 2022, 2023, Oracle and/or its affiliates.
 // Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
 
 package rancher
@@ -9,20 +9,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/verrazzano/verrazzano/platform-operator/internal/monitor"
-	fakemonitor "github.com/verrazzano/verrazzano/platform-operator/internal/monitor/fake"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/verrazzano/verrazzano/pkg/constants"
 	ctrlerrors "github.com/verrazzano/verrazzano/pkg/controller/errors"
 	"github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
+	constants2 "github.com/verrazzano/verrazzano/platform-operator/constants"
 	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/spi"
+	"github.com/verrazzano/verrazzano/platform-operator/internal/config"
+	"github.com/verrazzano/verrazzano/platform-operator/internal/monitor"
+	fakemonitor "github.com/verrazzano/verrazzano/platform-operator/internal/monitor/fake"
 	admv1 "k8s.io/api/admissionregistration/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v12 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -386,6 +387,19 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 			},
 		},
 	}
+	rancherCleanupJob := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: rancherCleanupJobNamespace,
+			Name:      rancherCleanupJobName,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type: batchv1.JobComplete,
+				},
+			},
+		},
+	}
 	tests := []struct {
 		name           string
 		objects        []clipkg.Object
@@ -393,16 +407,21 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 	}{
 		{
 			name: "test empty cluster",
+			objects: []clipkg.Object{
+				&rancherCleanupJob,
+			},
 		},
 		{
 			name: "test non Rancher ns",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 			},
 		},
 		{
 			name: "test Rancher ns",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 			},
@@ -410,6 +429,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test multiple Rancher ns",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -418,6 +438,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test mutating webhook",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -428,6 +449,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test validating webhook",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -439,6 +461,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test CR and CRB",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -451,6 +474,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test non Rancher components",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&crNotRancher,
 				&crbNotRancher,
@@ -463,6 +487,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test config maps",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -479,6 +504,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test persistent volume",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -497,6 +523,7 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test clusterRole binding",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&nonRancherNs,
 				&rancherNs,
 				&rancherNs2,
@@ -516,12 +543,14 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		{
 			name: "test CRD finalizer cleanup",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&rancherClusterCRD,
 			},
 		},
 		{
 			name: "test Rancher CR cleanup",
 			objects: []clipkg.Object{
+				&rancherCleanupJob,
 				&rancherClusterCRD,
 				&settingCR,
 				&rancherNamespacedCRD,
@@ -530,7 +559,6 @@ func TestInvokeRancherSystemToolAndCleanup(t *testing.T) {
 		},
 	}
 
-	setRancherSystemTool("echo")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(getScheme()).WithObjects(tt.objects...).Build()
@@ -634,4 +662,142 @@ func TestIsRancherNamespace(t *testing.T) {
 			Name: "p-12345",
 		},
 	}))
+}
+
+// TestCleanupJob tests the creation and deletion of the rancher-cleanup job
+// GIVEN a call to runCleanupJob
+// WHEN no cleanup job exists
+// THEN expect a cleanup job to be created
+// GIVEN a call to deleteCleanupJob
+// WHEN a job already exists
+// THEN expect the job to be deleted
+func TestCleanupJob(t *testing.T) {
+	a := assert.New(t)
+	vz := v1alpha1.Verrazzano{}
+
+	c := fake.NewClientBuilder().WithScheme(getScheme()).Build()
+	ctx := spi.NewFakeContext(c, &vz, nil, false)
+	config.SetDefaultBomFilePath("../../../../verrazzano-bom.json")
+	setCleanupJobYamlPath("../../../../thirdparty/manifests/rancher-cleanup/rancher-cleanup.yaml")
+
+	// Expect the job to get created
+	err := runCleanupJob(ctx)
+	a.Error(err)
+	job := batchv1.Job{}
+	err = ctx.Client().Get(context.TODO(), types.NamespacedName{Namespace: rancherCleanupJobNamespace, Name: rancherCleanupJobName}, &job)
+	a.NoError(err)
+
+	// Expect the job to get deleted
+	deleteCleanupJob(ctx)
+	err = ctx.Client().Get(context.TODO(), types.NamespacedName{Namespace: rancherCleanupJobNamespace, Name: rancherCleanupJobName}, &job)
+	a.Error(err)
+	a.True(apierrors.IsNotFound(err))
+}
+
+// TestDeleteRancherFinalizers
+// GIVEN cluster resources with rancher finalizers
+//
+//	WHEN deleteRancherFinalizers is called
+//	THEN expect those resources to have their finalizers removed
+func TestDeleteRancherFinalizers(t *testing.T) {
+	a := assert.New(t)
+	vz := v1alpha1.Verrazzano{}
+
+	// Namespaces
+	ns1 := newNamespace(constants2.KeycloakNamespace)
+	ns2 := newNamespace(constants2.VerrazzanoSystemNamespace)
+
+	// ClusterRole that contains Rancher finalizers
+	cr1 := newClusterRole("cr1", "default", []string{"test", "test.cattle.io"})
+	crb1 := newClusterRoleBinding("crb1", "default", []string{"test", "test.cattle.io"})
+
+	// Role and RoleBinding that does not contain any Rancher finalizers
+	r1 := newRole("rb1", constants2.VerrazzanoSystemNamespace, []string{"test"})
+	rb1 := newRoleBinding("rb1", constants2.VerrazzanoSystemNamespace, []string{"test"})
+
+	// Role and RoleBinding that does contain Rancher finalizers
+	r2 := newRole("rb2", constants2.VerrazzanoSystemNamespace, []string{"test", "test.cattle.io"})
+	rb2 := newRoleBinding("rb2", constants2.VerrazzanoSystemNamespace, []string{"test", "test.cattle.io"})
+
+	// RoleBinding that does contain Rancher finalizers
+	r3 := newRole("rb3", constants2.KeycloakNamespace, []string{"test", "test.cattle.io"})
+	rb3 := newRoleBinding("rb3", constants2.KeycloakNamespace, []string{"test", "test.cattle.io"})
+
+	c := fake.NewClientBuilder().WithScheme(getScheme()).WithObjects(ns1, ns2, cr1, crb1, r1, r2, r3, rb1, rb2, rb3).Build()
+	ctx := spi.NewFakeContext(c, &vz, nil, false)
+	deleteRancherFinalizers(ctx)
+
+	var clusterRole = &rbacv1.ClusterRole{}
+	var clusterRoleBinding = &rbacv1.ClusterRoleBinding{}
+	var role = &rbacv1.Role{}
+	var roleBinding = &rbacv1.RoleBinding{}
+
+	type testCase struct {
+		clipkg.Object
+		expectedFinalizers int
+		destObject         clipkg.Object
+	}
+	testCases := []testCase{
+		{Object: cr1, expectedFinalizers: 0, destObject: clusterRole},
+		{Object: crb1, expectedFinalizers: 0, destObject: clusterRoleBinding},
+		{Object: rb1, expectedFinalizers: 1, destObject: roleBinding},
+		{Object: rb2, expectedFinalizers: 0, destObject: roleBinding},
+		{Object: rb3, expectedFinalizers: 0, destObject: roleBinding},
+		{Object: r1, expectedFinalizers: 1, destObject: role},
+		{Object: r2, expectedFinalizers: 0, destObject: role},
+		{Object: r3, expectedFinalizers: 0, destObject: role},
+	}
+
+	for _, test := range testCases {
+		err := ctx.Client().Get(context.TODO(), types.NamespacedName{Namespace: test.GetNamespace(), Name: test.GetName()}, test.destObject)
+		a.NoError(err)
+		a.Equal(test.expectedFinalizers, len(test.destObject.GetFinalizers()))
+	}
+}
+
+func newNamespace(name string) *v1.Namespace {
+	return &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+func newClusterRole(name string, namespace string, finalizers []string) *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespace,
+			Name:       name,
+			Finalizers: finalizers,
+		},
+	}
+}
+
+func newClusterRoleBinding(name string, namespace string, finalizers []string) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespace,
+			Name:       name,
+			Finalizers: finalizers,
+		},
+	}
+}
+
+func newRole(name string, namespace string, finalizers []string) *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespace,
+			Name:       name,
+			Finalizers: finalizers,
+		},
+	}
+}
+
+func newRoleBinding(name string, namespace string, finalizers []string) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespace,
+			Name:       name,
+			Finalizers: finalizers,
+		},
+	}
 }
