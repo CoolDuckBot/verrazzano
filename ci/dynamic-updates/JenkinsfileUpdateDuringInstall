@@ -1,14 +1,13 @@
-// Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+// Copyright (c) 2023, Oracle and/or its affiliates.
 // Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
 
 def DOCKER_IMAGE_TAG
-def agentLabel = "1.4-large"
+def agentLabel = "1.4-large-phx"
 def EFFECTIVE_DUMP_K8S_CLUSTER_ON_SUCCESS = false
 
 pipeline {
     options {
         skipDefaultCheckout true
-        copyArtifactPermission('*');
         timestamps ()
     }
 
@@ -18,7 +17,7 @@ pipeline {
             args "${RUNNER_DOCKER_ARGS_1_4}"
             registryUrl "${RUNNER_DOCKER_REGISTRY_URL}"
             registryCredentialsId 'ocir-pull-and-push-account'
-            label "blocker-large-1_4"
+            label "${agentLabel}"
         }
     }
 
@@ -26,7 +25,7 @@ pipeline {
         choice (name: 'KUBERNETES_CLUSTER_VERSION',
                 description: 'Kubernetes Version for KinD Cluster',
                 // 1st choice is the default value
-                choices: [ "1.22", "1.23", "1.24", "1.21", "1.20" ])
+                choices: [ "1.24", "1.23", "1.22", "1.21" ])
         string (name: 'GIT_COMMIT_TO_USE',
                         defaultValue: 'NONE',
                         description: 'This is the full git commit hash from the source build to be used for all jobs',
@@ -43,15 +42,6 @@ pipeline {
                 description: 'This is the API crd version.',
                 // 1st choice is the default value
                 choices: [ "v1beta1", "v1alpha1"])
-        booleanParam (description: 'Whether to create the cluster with Calico for AT testing (defaults to true)', name: 'CREATE_CLUSTER_USE_CALICO', defaultValue: true)
-        booleanParam (description: 'Whether to dump k8s cluster on success (off by default can be useful to capture for comparing to failed cluster)', name: 'DUMP_K8S_CLUSTER_ON_SUCCESS', defaultValue: false)
-        booleanParam (description: 'Whether to include the slow tests in the acceptance tests', name: 'RUN_SLOW_TESTS', defaultValue: true)
-        string (name: 'CONSOLE_REPO_BRANCH',
-                defaultValue: '',
-                description: 'The branch to check out after cloning the console repository.',
-                trim: true)
-        booleanParam (description: 'Whether to emit metrics from the pipeline', name: 'EMIT_METRICS', defaultValue: true)
-        booleanParam (description: 'Whether to enable debug logging of the istio envoy in the VZ API pod', name: 'ENABLE_API_ENVOY_LOGGING', defaultValue: true)
         string (name: 'TAGGED_TESTS',
                 defaultValue: '',
                 description: 'A comma separated list of build tags for tests that should be executed (e.g. unstable_test). Default:',
@@ -64,7 +54,12 @@ pipeline {
                 defaultValue: '_excluded_test',
                 description: 'A regex matching any fully qualified test file that should not be executed (e.g. multicluster/|_excluded_test). Default: _excluded_test',
                 trim: true)
+        booleanParam (description: 'Whether to create the cluster with Calico for AT testing (defaults to true)', name: 'CREATE_CLUSTER_USE_CALICO', defaultValue: true)
+        booleanParam (description: 'Whether to dump k8s cluster on success (off by default can be useful to capture for comparing to failed cluster)', name: 'DUMP_K8S_CLUSTER_ON_SUCCESS', defaultValue: false)
         booleanParam (description: 'Whether to capture full cluster snapshot on test failure', name: 'CAPTURE_FULL_CLUSTER', defaultValue: false)
+        choice (name:'WAIT_FOR_RESOURCE_BEFORE_UPDATE',
+                description: 'The update to the VZ CR will occur after this specified resource is created. This affects the timing of the update.',
+                choices: [ "keycloak auth secret", "rancher bootstrap secret"])
     }
 
     environment {
@@ -80,29 +75,22 @@ pipeline {
         CLUSTER_NAME = 'verrazzano'
         POST_DUMP_FAILED_FILE = "${WORKSPACE}/post_dump_failed_file.tmp"
         TESTS_EXECUTED_FILE = "${WORKSPACE}/tests_executed_file.tmp"
-        IMG_LIST_FILE = "${WORKSPACE}/verrazzano_images.txt"
         KUBECONFIG = "${WORKSPACE}/test_kubeconfig"
         VERRAZZANO_KUBECONFIG = "${KUBECONFIG}"
         OCR_CREDS = credentials('ocr-pull-and-push-account')
         OCR_REPO = 'container-registry.oracle.com'
         IMAGE_PULL_SECRET = 'verrazzano-container-registry'
-        INSTALL_CONFIG_FILE_KIND = "./tests/e2e/config/scripts/${params.CRD_API_VERSION}/install-verrazzano-kind.yaml"
+        INSTALL_CONFIG_FILE_KIND = "./tests/e2e/config/scripts/${params.CRD_API_VERSION}/install-verrazzano-kind-with-persistence.yaml"
         INSTALL_PROFILE = "dev"
         VZ_ENVIRONMENT_NAME = "default"
         TEST_SCRIPTS_DIR = "${GO_REPO_PATH}/verrazzano/tests/e2e/config/scripts"
         VERRAZZANO_OPERATOR_IMAGE="${params.VERRAZZANO_OPERATOR_IMAGE}"
-
-        WEBLOGIC_PSW = credentials('weblogic-example-domain-password') // Needed by ToDoList example test
-        DATABASE_PSW = credentials('todo-mysql-password') // Needed by ToDoList example test
 
         // Environment variables required to capture cluster snapshot and bug report on test failure
         DUMP_KUBECONFIG="${KUBECONFIG}"
         DUMP_COMMAND="${GO_REPO_PATH}/verrazzano/tools/scripts/k8s-dump-cluster.sh"
         TEST_DUMP_ROOT="${WORKSPACE}/test-cluster-snapshots"
         CAPTURE_FULL_CLUSTER="${params.CAPTURE_FULL_CLUSTER}"
-
-        // Environment variable for Verrazzano CLI executable
-        VZ_COMMAND="${GO_REPO_PATH}/vz"
 
         VERRAZZANO_INSTALL_LOGS_DIR="${WORKSPACE}/verrazzano/platform-operator/scripts/install/build/logs"
         VERRAZZANO_INSTALL_LOG="verrazzano-install.log"
@@ -112,12 +100,9 @@ pipeline {
         OCI_CLI_AUTH="instance_principal"
         OCI_OS_NAMESPACE = credentials('oci-os-namespace')
         OCI_OS_ARTIFACT_BUCKET="build-failure-artifacts"
-        OCI_OS_BUCKET="verrazzano-builds"
         OCI_OS_COMMIT_BUCKET="verrazzano-builds-by-commit"
-        VZ_CLI_TARGZ="vz-linux-amd64.tar.gz"
 
         // used to emit metrics
-        PROMETHEUS_GW_URL = credentials('prometheus-dev-url')
         PROMETHEUS_CREDENTIALS = credentials('prometheus-credentials')
         TEST_ENV_LABEL = "kind"
         K8S_VERSION_LABEL = "${params.KUBERNETES_CLUSTER_VERSION}"
@@ -130,6 +115,9 @@ pipeline {
         TEST_REPORT = "test-report.xml"
         GINKGO_REPORT_ARGS = "--junit-report=${TEST_REPORT} --keep-separate-reports=true"
         TEST_REPORT_DIR = "${WORKSPACE}/tests/e2e"
+
+        // how many nodes in the KIND cluster
+        KIND_NODE_COUNT = 3
     }
 
     stages {
@@ -202,146 +190,60 @@ pipeline {
                     setDisplayName()
                     currentBuild.description = params.KUBERNETES_CLUSTER_VERSION + " : " + SHORT_COMMIT_HASH + " : " + env.GIT_COMMIT + " : " + params.GIT_COMMIT_TO_USE
                 }
-                script {
-                    sh """
-                        echo "Downloading VZ CLI from object storage"
-                        oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/${VZ_CLI_TARGZ} --file ${VZ_CLI_TARGZ}
-                        tar xzf ${VZ_CLI_TARGZ} -C ${GO_REPO_PATH}
-                        ${GO_REPO_PATH}/vz version
-                    """
-                }
             }
         }
 
-        stage('Acceptance Tests') {
-
-            stages {
-                stage('Prepare AT environment') {
+        // This kicks off two parallel stages:
+        //     1. A stage to install Verrazzano, with a typo in the Verrazzano CRD
+        //     2. A stage that waits a certain amount of time, then updates the Verrazzano CRD to fix the typo while the first stage is installing
+        // This aims to test that updates to the Verrazzano CRD during initial install does not break the installation.
+        stage('Update During Install') {
+            parallel {
+                stage('Install Verrazzano with Wildcard DNS Typo') {
                     environment {
                         KIND_KUBERNETES_CLUSTER_VERSION="${params.KUBERNETES_CLUSTER_VERSION}"
-                        OCI_CLI_AUTH="instance_principal"
                         OCI_OS_LOCATION="ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}"
                     }
                     steps {
+                        // This installs Verrazzano with an invalid WildcardDNS domain of "typodomain.io"
+                        // This also makes sure that certain components relevant to testing are enabled
                         sh """
                             cd ${GO_REPO_PATH}/verrazzano
-                            ci/scripts/prepare_jenkins_at_environment.sh ${params.CREATE_CLUSTER_USE_CALICO} ${params.WILDCARD_DNS_DOMAIN}
+                            yq -i eval '.spec.components.keycloak.enabled = true' ${INSTALL_CONFIG_FILE_KIND}
+                            yq -i eval '.spec.components.rancher.enabled = true' ${INSTALL_CONFIG_FILE_KIND}
+                            ci/scripts/prepare_jenkins_at_environment.sh ${params.CREATE_CLUSTER_USE_CALICO} "typodomain.io"
                         """
                     }
                     post {
-                        failure {
-                            archiveArtifacts artifacts: "**/kind-logs/**", allowEmptyArchive: true
-                        }
                         success {
-                            sh """
-                                oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_BUCKET} --name ${env.BRANCH_NAME}/generated-verrazzano-bom.json --file ${WORKSPACE}/downloaded-verrazzano-bom.json
-                                ${GO_REPO_PATH}/verrazzano/tools/scripts/generate_image_list.sh $WORKSPACE/downloaded-verrazzano-bom.json $WORKSPACE/generated_verrazzano_images.txt
-                                cat $WORKSPACE/generated_verrazzano_images.txt | cut -d/ -f2- | sort -u > $WORKSPACE/verrazzano_images.txt
-                            """
-                        }
-                        always {
-                            archiveArtifacts artifacts: "acceptance-test-operator.yaml,downloaded-operator.yaml", allowEmptyArchive: true
                             script {
-                                VZ_TEST_METRIC = metricJobName('')
-                                metricTimerStart("${VZ_TEST_METRIC}")
-                            }
-                            // enable debug logging of Verrazzano api istio proxy
-                            script {
-                                if (params.ENABLE_API_ENVOY_LOGGING) {
-                                    sh '''
-                                        vz_api_pod=\$(kubectl get pod -n verrazzano-system -l app=verrazzano-authproxy --no-headers -o custom-columns=\":metadata.name\")
-                                        if [ -z "\$vz_api_pod" ]; then
-                                          echo "Could not find verrazzano-authproxy pod, not enabling debug logging"
-                                        else
-                                          kubectl exec \$vz_api_pod -c istio-proxy -n verrazzano-system -- curl -X POST http://localhost:15000/logging?level=debug
-                                        fi
-                                        nginx_ing_pod=\$(kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers -o custom-columns=\":metadata.name\")
-                                        if [ -z "\$nginx_ing_pod" ]; then
-                                          echo "Could not find nginx ingress controller pod, not enabling debug logging"
-                                        else
-                                          kubectl exec \$nginx_ing_pod -c istio-proxy -n ingress-nginx -- curl -X POST http://localhost:15000/logging?level=debug
-                                        fi
-                                    '''
+                                if (EFFECTIVE_DUMP_K8S_CLUSTER_ON_SUCCESS == true) {
+                                    dumpK8sCluster('dynamic-install-post-install-cluster-snapshot')
                                 }
                             }
                         }
+                        failure {
+                            archiveArtifacts artifacts: "**/kind-logs/**", allowEmptyArchive: true
+                        }
+                        always {
+                            archiveArtifacts artifacts: "acceptance-test-operator.yaml,downloaded-operator.yaml", allowEmptyArchive: true
+                        }
                     }
                 }
 
-                stage('Verify Install') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/verify-install"
+                stage('Update the VZ CR') {
+                    options {
+                        timeout(time: 30, unit: "MINUTES")
                     }
                     steps {
-                        runGinkgoRandomize('verify-install')
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: '**/coverage.html,**/logs/*,**/test-cluster-snapshots/**', allowEmptyArchive: true
-                            junit testResults: '**/*test-result.xml', allowEmptyResults: true
-                        }
-                    }
-                }
-
-                stage('Run Acceptance Tests Deployments') {
-                    parallel {
-                        stage('examples todo') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-todo"
+                        script {
+                            // first wait for certain resources to be created, then update the Verrazzano CRD to fix the WildcardDNS typo
+                            if (params.WAIT_FOR_RESOURCE_BEFORE_UPDATE == 'keycloak auth secret') {
+                                waitForKeycloakAuthSecret()
+                            } else if (params.WAIT_FOR_RESOURCE_BEFORE_UPDATE == 'rancher bootstrap secret') {
+                                waitForRancherBootstrapSecret()
                             }
-                            steps {
-                                runGinkgo('examples/todo')
-                            }
-                        }
-                        stage('examples socks') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-socks"
-                            }
-                            steps {
-                                runSocksVariant('helidon')
-                                runSocksVariant('micronaut')
-                                runSocksVariant('spring')
-                            }
-                        }
-                        stage('examples spring') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-spring"
-                            }
-                            steps {
-                                runGinkgo('examples/springboot')
-                            }
-                        }
-                        stage('examples helidon 1') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-helidon-1"
-                            }
-                            steps {
-                                runGinkgo('examples/helidon')
-                            }
-                        }
-                        stage('examples helidon 2') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-helidon-2"
-                            }
-                            steps {
-                                runGinkgo('examples/helidon')
-                            }
-                        }
-                        stage('examples helidon-config') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-helidon-config"
-                            }
-                            steps {
-                                runGinkgo('examples/helidonconfig')
-                            }
-                        }
-                        stage('examples bobs') {
-                            environment {
-                                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-bobs"
-                            }
-                            steps {
-                                runGinkgo('examples/bobsbooks')
-                            }
+                            patchWildcardDNSDomain()
                         }
                     }
                 }
@@ -350,19 +252,63 @@ pipeline {
             post {
                 failure {
                     script {
-                        METRICS_PUSHED=metricTimerEnd("${VZ_TEST_METRIC}", '0')
                         if ( fileExists(env.TESTS_EXECUTED_FILE) ) {
-                            dumpK8sCluster('new-kind-acceptance-tests-cluster-snapshot')
+                            dumpK8sCluster('dynamic-install-failed-cluster-snapshot')
                         }
                     }
                 }
                 success {
                     script {
-                        METRICS_PUSHED=metricTimerEnd("${VZ_TEST_METRIC}", '1')
                         if (EFFECTIVE_DUMP_K8S_CLUSTER_ON_SUCCESS == true && fileExists(env.TESTS_EXECUTED_FILE) ) {
-                            dumpK8sCluster('new-kind-acceptance-tests-cluster-snapshot')
+                            dumpK8sCluster('dynamic-install-success-cluster-snapshot')
                         }
                     }
+                }
+            }
+        }
+
+        stage('Verify Tests') {
+            environment {
+                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/post-install-verify-infra"
+            }
+            steps {
+                runGinkgoRandomize('verify-install')
+            }
+            post {
+                failure {
+                    script {
+                        if ( fileExists(env.TESTS_EXECUTED_FILE) ) {
+                            dumpK8sCluster('dynamic-install-verify-install-failed-cluster-snapshot')
+                        }
+                    }
+                }
+                always {
+                    archiveArtifacts artifacts: '**/coverage.html,**/logs/*,**/test-cluster-snapshots/**', allowEmptyArchive: true
+                    junit testResults: '**/*test-result.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('Infra Tests') {
+            environment {
+                DUMP_DIRECTORY="${TEST_DUMP_ROOT}/post-install-infra-tests"
+            }
+            steps {
+                script {
+                    parallel generateVerifyInfraStages("${TEST_DUMP_ROOT}/post-install-infra-tests")
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if ( fileExists(env.TESTS_EXECUTED_FILE) ) {
+                            dumpK8sCluster('dynamic-install-verify-infra-failed-cluster-snapshot')
+                        }
+                    }
+                }
+                always {
+                    archiveArtifacts artifacts: '**/coverage.html,**/logs/*,**/test-cluster-snapshots/**', allowEmptyArchive: true
+                    junit testResults: '**/*test-result.xml', allowEmptyResults: true
                 }
             }
         }
@@ -375,45 +321,20 @@ pipeline {
                     dumpVerrazzanoSystemPods()
                     dumpCattleSystemPods()
                     dumpNginxIngressControllerLogs()
-                    dumpVerrazzanoPlatformOperatorLogs()
+                    dumpVerrazzanoPlatformOperatorLogs("post-run")
                     dumpVerrazzanoApplicationOperatorLogs()
                     dumpOamKubernetesRuntimeLogs()
                     dumpVerrazzanoApiLogs()
                 }
             }
-
             sh """
                 # Copy the generated test reports to WORKSPACE to archive them
                 mkdir -p ${TEST_REPORT_DIR}
                 cd ${GO_REPO_PATH}/verrazzano/tests/e2e
                 find . -name "${TEST_REPORT}" | cpio -pdm ${TEST_REPORT_DIR}
-
-                # Append the images for the examples to verrazzano_images.txt
-                ${WORKSPACE}/tests/e2e/config/scripts/get_examples_image.sh ${WORKSPACE}/examples/todo-list/todo-list-components.yaml ${IMG_LIST_FILE}
-                ${WORKSPACE}/tests/e2e/config/scripts/get_examples_image.sh ${WORKSPACE}/examples/springboot-app/springboot-comp.yaml ${IMG_LIST_FILE}
-                ${WORKSPACE}/tests/e2e/config/scripts/get_examples_image.sh ${WORKSPACE}/examples/hello-helidon/hello-helidon-comp.yaml ${IMG_LIST_FILE}
-                ${WORKSPACE}/tests/e2e/config/scripts/get_examples_image.sh ${WORKSPACE}/examples/bobs-books/bobs-books-comp.yaml ${IMG_LIST_FILE}
-
-                # Rename example-bobs-books-order-manager to example-bobs-bookstore-order-manager to match existing image repository
-                sed -i 's/example-bobs-books-order-manager/example-bobs-bookstore-order-manager/' ${IMG_LIST_FILE}
-
-                echo "sorting the images file prior to archiving"
-                if [ -f ${IMG_LIST_FILE} ];
-                then
-                 sort -u -o ${IMG_LIST_FILE} ${IMG_LIST_FILE}
-                fi
             """
-            archiveArtifacts artifacts: "**/coverage.html,**/logs/**,**/verrazzano_images.txt,**/*full-cluster*/**,**/*bug-report*/**,**/Screenshot*.png,**/${TEST_REPORT}", allowEmptyArchive: true
+            archiveArtifacts artifacts: "**/coverage.html,**/logs/**,**/verrazzano_images.txt,**/*full-cluster*/**,**/*bug-report*/**,**/Screenshot*.png,**/ConsoleLog*.log,**/${TEST_REPORT}", allowEmptyArchive: true
             junit testResults: "**/${TEST_REPORT}", allowEmptyResults: true
-            script {
-                if (params.EMIT_METRICS) {
-                    withCredentials([usernameColonPassword(credentialsId: 'prometheus-credentials', variable: 'PROMETHEUS_CREDENTIALS')]) {
-                        sh """
-                            ${GO_REPO_PATH}/verrazzano/ci/scripts/dashboard/emit_metrics.sh "${GO_REPO_PATH}/verrazzano/tests/e2e" "${PROMETHEUS_CREDENTIALS}" || echo "Emit metrics failed, continuing with other post actions"
-                        """
-                    }
-                }
-            }
             deleteCluster()
         }
         failure {
@@ -427,45 +348,36 @@ pipeline {
                 rm archive.zip
             """
             script {
-                if (env.BRANCH_NAME == "master" || env.BRANCH_NAME ==~ "release-.*" || env.BRANCH_NAME ==~ "mark/*") {
+                if (env.BRANCH_NAME == "master" || env.BRANCH_NAME ==~ "release-.*") {
                     slackSend ( message: "Job Failed - \"${env.JOB_NAME}\" build: ${env.BUILD_NUMBER}\n\nView the log at:\n ${env.BUILD_URL}\n\nBlue Ocean:\n${env.RUN_DISPLAY_URL}" )
                 }
             }
         }
         cleanup {
-            metricBuildDuration()
-            emitJobMetrics()
             deleteDir()
         }
     }
 }
 
-def runGinkgoRandomize(testSuitePath, kubeConfig = '') {
+def generateVerifyInfraStages(dumpRoot) {
+    return [
+        "verify-infra restapi": {
+            runGinkgoRandomize('verify-infra/restapi', "${dumpRoot}/verify-infra-restapi")
+        },
+        "verify-infra oam": {
+            runGinkgoRandomize('verify-infra/oam', "${dumpRoot}/verify-infra-oam")
+        },
+    ]
+}
+
+def runGinkgoRandomize(testSuitePath, dumpDir = '') {
     catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
         sh """
-            if [ ! -z "${kubeConfig}" ]; then
-                export KUBECONFIG="${kubeConfig}"
+            if [ ! -z "${dumpDir}" ]; then
+                export DUMP_DIRECTORY=${dumpDir}
             fi
             cd ${GO_REPO_PATH}/verrazzano/tests/e2e
             ginkgo -p --randomize-all -v --keep-going --no-color ${GINKGO_REPORT_ARGS} -tags="${params.TAGGED_TESTS}" --focus-file="${params.INCLUDED_TESTS}" --skip-file="${params.EXCLUDED_TESTS}" ${testSuitePath}/...
-        """
-    }
-}
-
-def runSocksVariant(variant) {
-    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-            sh """
-                cd ${GO_REPO_PATH}/verrazzano/tests/e2e
-                SOCKS_SHOP_VARIANT=${variant} ginkgo -v --keep-going --no-color ${GINKGO_REPORT_ARGS} -tags="${params.TAGGED_TESTS}" --focus-file="${params.INCLUDED_TESTS}" --skip-file="${params.EXCLUDED_TESTS}"  examples/socks/...
-            """
-        }
-}
-
-def runGinkgo(testSuitePath) {
-    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-        sh """
-            cd ${GO_REPO_PATH}/verrazzano/tests/e2e
-            ginkgo -v -keep-going --no-color ${GINKGO_REPORT_ARGS} -tags="${params.TAGGED_TESTS}" --focus-file="${params.INCLUDED_TESTS}" --skip-file="${params.EXCLUDED_TESTS}" ${testSuitePath}/...
         """
     }
 }
@@ -483,10 +395,10 @@ def dumpVerrazzanoSystemPods() {
         ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -m "verrazzano system pods" || echo "failed" > ${POST_DUMP_FAILED_FILE}
         export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-system-certs.log"
         ./scripts/install/k8s-dump-objects.sh -o cert -n verrazzano-system -m "verrazzano system certs" || echo "failed" > ${POST_DUMP_FAILED_FILE}
-        export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-system-kibana.log"
-        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "vmi-system-kibana-*" -m "verrazzano system kibana log" -l -c kibana || echo "failed" > ${POST_DUMP_FAILED_FILE}
+        export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-system-osd.log"
+        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "vmi-system-osd-*" -m "verrazzano system opensearchdashboards log" -l -c osd || echo "failed" > ${POST_DUMP_FAILED_FILE}
         export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-system-es-master.log"
-        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "vmi-system-es-master-*" -m "verrazzano system kibana log" -l -c es-master || echo "failed" > ${POST_DUMP_FAILED_FILE}
+        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "vmi-system-es-master-*" -m "verrazzano system opensearchdashboards log" -l -c es-master || echo "failed" > ${POST_DUMP_FAILED_FILE}
     """
 }
 
@@ -508,12 +420,12 @@ def dumpNginxIngressControllerLogs() {
     """
 }
 
-def dumpVerrazzanoPlatformOperatorLogs() {
+def dumpVerrazzanoPlatformOperatorLogs(stage) {
     sh """
         ## dump out verrazzano-platform-operator logs
         mkdir -p ${WORKSPACE}/verrazzano-platform-operator/logs
-        kubectl -n verrazzano-install logs --selector=app=verrazzano-platform-operator > ${WORKSPACE}/verrazzano-platform-operator/logs/verrazzano-platform-operator-pod.log --tail -1 || echo "failed" > ${POST_DUMP_FAILED_FILE}
-        kubectl -n verrazzano-install describe pod --selector=app=verrazzano-platform-operator > ${WORKSPACE}/verrazzano-platform-operator/logs/verrazzano-platform-operator-pod.out || echo "failed" > ${POST_DUMP_FAILED_FILE}
+        kubectl -n verrazzano-install logs --selector=app=verrazzano-platform-operator > ${WORKSPACE}/verrazzano-platform-operator/logs/verrazzano-platform-operator-${stage}-pod --tail -1 || echo "failed" > ${POST_DUMP_FAILED_FILE}
+        kubectl -n verrazzano-install describe pod --selector=app=verrazzano-platform-operator > ${WORKSPACE}/verrazzano-platform-operator/logs/verrazzano-platform-operator-${stage}-pod.out || echo "failed" > ${POST_DUMP_FAILED_FILE}
         echo "verrazzano-platform-operator logs dumped to verrazzano-platform-operator-pod.log"
         echo "verrazzano-platform-operator pod description dumped to verrazzano-platform-operator-pod.out"
         echo "------------------------------------------"
@@ -547,8 +459,8 @@ def dumpOamKubernetesRuntimeLogs() {
 def dumpVerrazzanoApiLogs() {
     sh """
         cd ${GO_REPO_PATH}/verrazzano/platform-operator
-        export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-authproxy.log"
-        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "verrazzano-authproxy-*" -m "verrazzano api" -c verrazzano-authproxy -l || echo "failed" > ${POST_DUMP_FAILED_FILE}
+        export DIAGNOSTIC_LOG="${VERRAZZANO_INSTALL_LOGS_DIR}/verrazzano-api.log"
+        ./scripts/install/k8s-dump-objects.sh -o pods -n verrazzano-system -r "verrazzano-api-*" -m "verrazzano api" -c verrazzano-api -l || echo "failed" > ${POST_DUMP_FAILED_FILE}
     """
 }
 
@@ -572,77 +484,6 @@ def deleteCluster() {
     """
 }
 
-def metricJobName(stageName) {
-    job = env.JOB_NAME.split("/")[0]
-    job = '_' + job.replaceAll('-','_')
-    if (stageName) {
-        job = job + '_' + stageName
-    }
-    return job
-}
-
-// Construct the set of labels/dimensions for the metrics
-def getMetricLabels() {
-    def buildNumber = String.format("%010d", env.BUILD_NUMBER.toInteger())
-    labels = 'build_number=\\"' + "${buildNumber}"+'\\",' +
-             'jenkins_build_number=\\"' + "${env.BUILD_NUMBER}"+'\\",' +
-             'jenkins_job=\\"' + "${env.JOB_NAME}".replace("%2F","/") + '\\",' +
-             'commit_sha=\\"' + "${env.GIT_COMMIT}"+'\\",' +
-             'kubernetes_version=\\"' + "${params.KUBERNETES_CLUSTER_VERSION}"+'\\",' +
-             'test_env=\\"kind\\"'
-    return labels
-}
-
-def metricTimerStart(metricName) {
-    def timerStartName = "${metricName}_START"
-    env."${timerStartName}" = sh(returnStdout: true, script: "date +%s").trim()
-}
-
-def metricTimerEnd(metricName, status) {
-    def timerStartName = "${metricName}_START"
-    def timerEndName   = "${metricName}_END"
-    env."${timerEndName}" = sh(returnStdout: true, script: "date +%s").trim()
-    if (params.EMIT_METRICS) {
-        long x = env."${timerStartName}" as long;
-        long y = env."${timerEndName}" as long;
-        def dur = (y-x)
-        labels = getMetricLabels()
-        withCredentials([usernameColonPassword(credentialsId: 'prometheus-credentials', variable: 'PROMETHEUS_CREDENTIALS')]) {
-            EMIT = sh(returnStdout: true, script: "ci/scripts/metric_emit.sh ${PROMETHEUS_GW_URL} ${PROMETHEUS_CREDENTIALS} ${metricName} ${env.BRANCH_NAME} $labels ${status} ${dur}")
-            echo "emit prometheus metrics: $EMIT"
-            return EMIT
-        }
-    } else {
-        return ''
-    }
-}
-
-// Emit the metrics indicating the duration and result of the build
-def metricBuildDuration() {
-    def status = "${currentBuild.currentResult}".trim()
-    long duration = "${currentBuild.duration}" as long;
-    long durationInSec = (duration/1000)
-    testMetric = metricJobName('')
-    def metricValue = "-1"
-    statusLabel = status.substring(0,1)
-    if (status.equals("SUCCESS")) {
-        metricValue = "1"
-    } else if (status.equals("FAILURE")) {
-        metricValue = "0"
-    } else {
-        // Consider every other status as a single label
-        statusLabel = "A"
-    }
-    if (params.EMIT_METRICS) {
-        labels = getMetricLabels()
-        labels = labels + ',result=\\"' + "${statusLabel}"+'\\"'
-        withCredentials([usernameColonPassword(credentialsId: 'prometheus-credentials', variable: 'PROMETHEUS_CREDENTIALS')]) {
-            METRIC_STATUS = sh(returnStdout: true, returnStatus: true, script: "ci/scripts/metric_emit.sh ${PROMETHEUS_GW_URL} ${PROMETHEUS_CREDENTIALS} ${testMetric}_job ${env.BRANCH_NAME} $labels ${metricValue} ${durationInSec}")
-            echo "Publishing the metrics for build duration and status returned status code $METRIC_STATUS"
-        }
-    }
-}
-
 def setDisplayName() {
     echo "Start setDisplayName"
     def causes = currentBuild.getBuildCauses()
@@ -662,12 +503,47 @@ def setDisplayName() {
     echo "End setDisplayName"
 }
 
-def emitJobMetrics() {
-    env.JOB_STATUS = "${currentBuild.currentResult}".trim()
-    long duration = "${currentBuild.duration}" as long;
-    env.DURATION = duration
-    long timeInMillis = "${currentBuild.timeInMillis}" as long;
-    long startTimeInMillis = "${currentBuild.startTimeInMillis}" as long;
-    env.TIME_WAITING = startTimeInMillis-timeInMillis
-    runGinkgoRandomize('jobmetrics')
+def patchWildcardDNSDomain() {
+    sh """
+        echo "WildcardDNS Configuration before patching:"
+        kubectl get vz my-verrazzano -o yaml | grep 'domain:'
+
+        # change the Wildcard DNS domain
+        kubectl patch vz my-verrazzano -p '{"spec":{"components":{"dns":{"wildcard":{"domain":"${params.WILDCARD_DNS_DOMAIN}"}}}}}' --type=merge
+
+        echo "WildcardDNSConfiguration after patching:"
+        kubectl get vz my-verrazzano -o yaml | grep 'domain:'
+    """
+}
+
+def waitForRancherBootstrapSecret() {
+    sh """
+        while ! kubectl get vz
+        do
+            echo "Waiting for verrazzano resource to be created..."
+            sleep 30s
+        done
+
+        while ! kubectl get secret bootstrap-secret --namespace cattle-system
+        do
+            echo "Waiting for bootstrap-secret Secret to be created..."
+            sleep 1m
+        done
+    """
+}
+
+def waitForKeycloakAuthSecret() {
+    sh """
+        while ! kubectl get vz
+        do
+            echo "Waiting for verrazzano resource to be created..."
+            sleep 30s
+        done
+
+        while ! kubectl get secret keycloak-http -n keycloak
+        do
+            echo "Waiting for keycloak/keycloak-http secret to be created..."
+            sleep 15s
+        done
+    """
 }

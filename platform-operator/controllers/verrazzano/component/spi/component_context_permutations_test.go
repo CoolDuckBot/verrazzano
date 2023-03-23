@@ -1,4 +1,4 @@
-// Copyright (c) 2021, 2022, Oracle and/or its affiliates.
+// Copyright (c) 2021, 2023, Oracle and/or its affiliates.
 // Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
 package spi
 
@@ -32,7 +32,7 @@ var falseValue = false
 
 var trueValue = true
 
-//var defaultPVC50Gi, _ = resource.ParseQuantity("50Gi")
+// var defaultPVC50Gi, _ = resource.ParseQuantity("50Gi")
 var pvc100Gi, _ = resource.ParseQuantity("100Gi")
 var pvc500Gi, _ = resource.ParseQuantity("2T")
 
@@ -356,7 +356,7 @@ var prodIngressIstioOverrides = v1alpha1.Verrazzano{
 		Components: v1alpha1.ComponentSpec{
 			Ingress: &v1alpha1.IngressNginxComponent{
 				NGINXInstallArgs: []v1alpha1.InstallArgs{
-					{Name: "controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/oci-load-balancer-shape\"", Value: "10Mbps"},
+					{Name: "controller.service.annotations.\"service\\.beta\\.kubernetes\\.io/oci-load-balancer-shape\"", Value: "flexible"},
 					{Name: "controller.service.externalTrafficPolicy", Value: "Local"},
 					{Name: "controller.service.externalIPs", ValueList: []string{"11.22.33.44"}},
 				},
@@ -367,7 +367,7 @@ var prodIngressIstioOverrides = v1alpha1.Verrazzano{
 			},
 			Istio: &v1alpha1.IstioComponent{
 				IstioInstallArgs: []v1alpha1.InstallArgs{
-					{Name: "gateways.istio-ingressgateway.serviceAnnotations.\"service\\.beta\\.kubernetes\\.io/oci-load-balancer-shape\"", Value: "10Mbps"},
+					{Name: "gateways.istio-ingressgateway.serviceAnnotations.\"service\\.beta\\.kubernetes\\.io/oci-load-balancer-shape\"", Value: "flexible"},
 					{Name: "gateways.istio-ingressgateway.replicaCount", Value: "3"},
 					{Name: "gateways.istio-ingressgateway.externalIPs", ValueList: []string{"11.22.33.44"}},
 				},
