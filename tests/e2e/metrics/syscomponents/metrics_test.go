@@ -280,7 +280,7 @@ var _ = t.Describe("Thanos Metrics", Label("f:observability.monitoring.prom"), f
 			t.It("Verify envoy stats", func() {
 				Eventually(func() bool {
 					return verifyEnvoyStats(envoyStatsRecentLookups)
-				}, longWaitTimeout, longPollingInterval).Should(BeTrue())
+				}).Should(BeTrue())
 			})
 		}
 	})
