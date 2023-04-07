@@ -361,10 +361,13 @@ func scrapeNodeMetricsTargetHealthy() ([]interface{}, error) {
 	if len(string(out)) == 0 {
 		return nil, fmt.Errorf("prometheus node exporter scrape targets request returned no data")
 	}
+	fmt.Println(len(string(out)))
+	fmt.Println(string(out))
 	var data map[string]interface{}
 	if err = json.Unmarshal(out, &data); err != nil {
 		return nil, err
 	}
 	activeTargets := pkg.Jq(data, "data", "activeTargets").([]interface{})
+	fmt.Println(activeTargets)
 	return activeTargets, nil
 }
