@@ -358,10 +358,10 @@ func scrapeNodeMetricsTargetHealthy() (int, error) {
 	cmd := exec.Command("kubectl", "exec", "prometheus-node-exporter-z5vsb", "-n", "verrazzano-monitoring", "--", "curl", metricsURL)
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	if len(string(out)) == 0 {
-		return nil, fmt.Errorf("prometheus node exporter scrape targets request returned no data")
+		return 0, fmt.Errorf("prometheus node exporter scrape targets request returned no data")
 	}
 	fmt.Println(len(string(out)))
 	//fmt.Println(string(out))
