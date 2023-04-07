@@ -4,8 +4,10 @@
 package syscomponents
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -342,4 +344,22 @@ func eventuallyMetricsContainLabels(metricName string, kv map[string]string) {
 	Eventually(func() bool {
 		return metricsTest.MetricsExist(metricName, kv)
 	}, longWaitTimeout, longPollingInterval).Should(BeTrue())
+}
+
+func scrapeNodeMetricsTargetHealthy() ([]interface{}, error) {
+	metricsURL := "http://localhost:9100/metrics"
+	cmd := exec.Command("kubectl", "exec", "prometheus-node-exporter-z5vsb", "-n", "verrazzano-monitoring", "--", "curl", metricsURL)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	if len(string(out)) == 0 {
+		return nil, fmt.Errorf("prometheus node exporter scrape targets request returned no data")
+	}
+	var data map[string]interface{}
+	if err = json.Unmarshal(out, &data); err != nil {
+		return nil, err
+	}
+	activeTargets := pkg.Jq(data, "data", "activeTargets").([]interface{})
+	return activeTargets, nil
 }
