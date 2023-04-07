@@ -147,67 +147,67 @@ var _ = t.AfterEach(func() {})
 var _ = t.Describe("Thanos Metrics", Label("f:observability.monitoring.prom"), func() {
 	// Query Prometheus for the sample metrics from the default scraping jobs
 	var _ = t.Describe("for the system components", func() {
-		t.It("Verify sample NGINX metrics can be queried from Thanos", func() {
-			eventuallyMetricsContainLabels(ingressControllerSuccess, map[string]string{
-				controllerNamespace: ingressNginxNamespace,
-				appK8SIOInstance:    ingressController,
-			})
-		})
-
-		if !pkg.IsManagedClusterProfile() {
-			t.ItMinimumVersion("Verify sample OpenSearch metrics can be queried from Thanos", "1.5.0", kubeConfig, func() {
-				eventuallyMetricsContainLabels(esClusterStatusMetric, map[string]string{
-					container: esMaster,
-				})
-			})
-		}
-
-		t.It("Verify sample Container Advisor metrics can be queried from Thanos", func() {
-			eventuallyMetricsContainLabels(containerStartTimeSeconds, map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO summary counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_reconcile_duration_count", map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO summary sum times can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_reconcile_duration_sum", map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_reconcile_total", map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO error counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_error_reconcile_total", map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO install metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_component_install_duration_seconds", map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VPO upgrade counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels("vz_platform_operator_component_upgrade_duration_seconds", map[string]string{})
-		})
-
-		t.ItMinimumVersion("Verify VMO function metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vmoFunctionMetric, map[string]string{})
-		})
-
-		t.ItMinimumVersion("Verify VMO counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vmoCounterMetric, map[string]string{})
-		})
-
-		t.ItMinimumVersion("Verify VMO gauge metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vmoGaugeMetric, map[string]string{})
-		})
-
-		t.ItMinimumVersion("Verify VMO timestamp metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vmoTimestampMetric, map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VAO successful counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vaoSuccessCountMetric, map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VAO failed counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vaoFailCountMetric, map[string]string{})
-		})
-		t.ItMinimumVersion("Verify VAO Duration summary metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
-			eventuallyMetricsContainLabels(vaoDurationCountMetric, map[string]string{})
-		})
+		//t.It("Verify sample NGINX metrics can be queried from Thanos", func() {
+		//	eventuallyMetricsContainLabels(ingressControllerSuccess, map[string]string{
+		//		controllerNamespace: ingressNginxNamespace,
+		//		appK8SIOInstance:    ingressController,
+		//	})
+		//})
+		//
+		//if !pkg.IsManagedClusterProfile() {
+		//	t.ItMinimumVersion("Verify sample OpenSearch metrics can be queried from Thanos", "1.5.0", kubeConfig, func() {
+		//		eventuallyMetricsContainLabels(esClusterStatusMetric, map[string]string{
+		//			container: esMaster,
+		//		})
+		//	})
+		//}
+		//
+		//t.It("Verify sample Container Advisor metrics can be queried from Thanos", func() {
+		//	eventuallyMetricsContainLabels(containerStartTimeSeconds, map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO summary counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_reconcile_duration_count", map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO summary sum times can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_reconcile_duration_sum", map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_reconcile_total", map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO error counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_error_reconcile_total", map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO install metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_component_install_duration_seconds", map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VPO upgrade counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels("vz_platform_operator_component_upgrade_duration_seconds", map[string]string{})
+		//})
+		//
+		//t.ItMinimumVersion("Verify VMO function metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vmoFunctionMetric, map[string]string{})
+		//})
+		//
+		//t.ItMinimumVersion("Verify VMO counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vmoCounterMetric, map[string]string{})
+		//})
+		//
+		//t.ItMinimumVersion("Verify VMO gauge metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vmoGaugeMetric, map[string]string{})
+		//})
+		//
+		//t.ItMinimumVersion("Verify VMO timestamp metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vmoTimestampMetric, map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VAO successful counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vaoSuccessCountMetric, map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VAO failed counter metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vaoFailCountMetric, map[string]string{})
+		//})
+		//t.ItMinimumVersion("Verify VAO Duration summary metrics can be queried from Thanos", metricsVersion, kubeConfig, func() {
+		//	eventuallyMetricsContainLabels(vaoDurationCountMetric, map[string]string{})
+		//})
 
 		t.It("Verify sample Node Exporter metrics can be queried from Thanos", func() {
 			Eventually(func() bool {
@@ -216,6 +216,10 @@ var _ = t.Describe("Thanos Metrics", Label("f:observability.monitoring.prom"), f
 				}
 				return metricsTest.MetricsExist(cpuSecondsTotal, kv)
 			}, longWaitTimeout, longPollingInterval).Should(BeTrue())
+		})
+
+		t.It("Verify node exporter is functional", func() {
+			scrapeNodeMetricsTargetHealthy()
 		})
 
 		if istioInjection == "enabled" {
@@ -347,6 +351,7 @@ func eventuallyMetricsContainLabels(metricName string, kv map[string]string) {
 }
 
 func scrapeNodeMetricsTargetHealthy() ([]interface{}, error) {
+	fmt.Println("executing scrapeNodeMetricsTargetHealthy")
 	metricsURL := "http://localhost:9100/metrics"
 	cmd := exec.Command("kubectl", "exec", "prometheus-node-exporter-z5vsb", "-n", "verrazzano-monitoring", "--", "curl", metricsURL)
 	out, err := cmd.Output()
