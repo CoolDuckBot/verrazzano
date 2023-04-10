@@ -221,7 +221,12 @@ var _ = t.Describe("Thanos Metrics", Label("f:observability.monitoring.prom"), f
 		t.It("Verify node exporter is functional when enabled", func() {
 			Eventually(func() string {
 				var command = []string{"curl", "http://localhost:9100/metrics"}
-				stdout, _, _ := pkg.Execute("prometheus-node-exporter-z5vsb", "", constants.VerrazzanoMonitoringNamespace, command)
+				stdout, stderr, err := pkg.Execute("prometheus-node-exporter-z5vsb", "", constants.VerrazzanoMonitoringNamespace, command)
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Println(stderr)
+				fmt.Println(stdout)
 				return stdout
 				//len, _ := scrapeNodeMetricsTargetHealthy()
 				//return len
