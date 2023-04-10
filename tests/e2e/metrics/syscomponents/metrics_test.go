@@ -217,7 +217,7 @@ var _ = t.Describe("Thanos Metrics", Label("f:observability.monitoring.prom"), f
 			}, longWaitTimeout, longPollingInterval).Should(BeTrue())
 		})
 
-		t.It("Verify node exporter is functional", func() {
+		t.It("Verify node exporter is functional when enabled", func() {
 			Eventually(func() int {
 				len, _ := scrapeNodeMetricsTargetHealthy()
 				return len
