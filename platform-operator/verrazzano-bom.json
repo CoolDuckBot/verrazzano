@@ -150,8 +150,8 @@
               "tag": "v0.1.18-20230403204343-4124528"
             },
             {
-              "image": "rancher-webhook-jenkins",
-              "tag": "20230411224946-9c44ffd"
+              "image": "rancher-webhook",
+              "tag": "v0.2.6-20230403210635-b6c499e"
             },
             {
               "image": "rancher-fleet-agent",
