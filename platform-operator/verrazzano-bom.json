@@ -150,16 +150,16 @@
               "tag": "v0.1.18-20230403204343-4124528"
             },
             {
-              "image": "rancher-webhook",
-              "tag": "v0.2.6-20230403210635-b6c499e"
+              "image": "rancher-webhook-jenkins",
+              "tag": "20230412170555-9c44ffd"
             },
             {
-              "image": "rancher-fleet-agent",
-              "tag": "v0.3.11-20230403202924-a3d42f2"
+              "image": "rancher-fleet-agent-jenkins",
+              "tag": "20230412170216-d296259"
             },
             {
-              "image": "rancher-fleet",
-              "tag": "v0.3.11-20230403202924-a3d42f2"
+              "image": "rancher-fleet-jenkins",
+              "tag": "20230412170216-d296259"
             },
             {
               "image": "rancher-gitjob",
@@ -728,7 +728,7 @@
           "images": [
             {
               "image": "rancher-backup-restore-operator",
-              "tag": "v2.1.3-20230208201830-0977be7",
+              "tag": "20230413125317-b846d96",
               "helmFullImageKey": "image.repository",
               "helmTagKey": "image.tag"
             }
@@ -739,8 +739,8 @@
           "name": "rancher-backup-kubectl",
           "images": [
             {
-              "image": "rancher-kubectl",
-              "tag": "v1.20.2-20230208201835-2f0ea54",
+              "image": "rancher-kubectl-jenkins",
+              "tag": "20230412171836-9bcfff4",
               "helmFullImageKey": "global.kubectl.repository",
               "helmTagKey": "global.kubectl.tag"
             }
