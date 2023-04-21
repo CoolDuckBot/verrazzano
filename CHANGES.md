@@ -4,6 +4,7 @@ Features:
 - The Prometheus components can now be enabled or disabled at any point in the Verrazzano lifecycle
 - Added a None profile that comes with all components disabled by default
 - Added Thanos, which supports high availability and long-term storage on top of Prometheus.
+- Added support for Kubernetes v1.25.
 
 Component version updates:
 
