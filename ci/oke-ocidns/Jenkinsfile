@@ -95,9 +95,17 @@ pipeline {
                 description: 'A regex matching any fully qualified test file that should not be executed (e.g. multicluster/|_excluded_test). Default: _excluded_test',
                 trim: true)
         booleanParam (description: 'Whether to capture full cluster snapshot on test failure', name: 'CAPTURE_FULL_CLUSTER', defaultValue: false)
+        string (name: 'VERSION_FOR_INSTALL',
+                        defaultValue: 'v1.5.2',
+                        description: 'This is the Verrazzano version for install before doing an upgrade.  By default, the v1.5.2 release will be installed',
+                        trim: true)
         string (name: 'VZ_VERSION_FOR_UPGRADE',
                                 defaultValue: 'NONE',
-                                description: 'The version for upgrade',
+                                description: 'The version for upgrade from the generated BOM',
+                                trim: true)
+        string (name: 'VZ_OPERATOR_BRANCH',
+                                defaultValue: 'NONE',
+                                description: 'The branch from which to pull the operator.yaml from store',
                                 trim: true)
     }
 
@@ -192,6 +200,8 @@ pipeline {
         GINKGO_REPORT_ARGS = "--junit-report=${TEST_REPORT} --keep-separate-reports=true"
 
         VERSION_FOR_UPGRADE="${params.VZ_VERSION_FOR_UPGRADE}"
+        VZ_OPERATOR_BRANCH="${params.VZ_OPERATOR_BRANCH}"
+        VERSION_FOR_INSTALL = "${params.VERSION_FOR_INSTALL}"
     }
 
     stages {
@@ -251,7 +261,7 @@ pipeline {
                 script {
                     sh """
                         echo "Downloading VZ CLI from object storage"
-                        oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/${VZ_CLI_TARGZ} --file ${VZ_CLI_TARGZ}
+                        oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${VZ_OPERATOR_BRANCH}/${SHORT_COMMIT_HASH}/${VZ_CLI_TARGZ} --file ${VZ_CLI_TARGZ}
                         mkdir -p ${GO_REPO_PATH}
                         tar xzf ${VZ_CLI_TARGZ} -C ${GO_REPO_PATH}
                         ${GO_REPO_PATH}/vz version
@@ -323,11 +333,9 @@ pipeline {
             steps {
                 sh """
                     echo "Install Platform Operator"
-                    #oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
-                    #cp ${WORKSPACE}/downloaded-operator.yaml ${WORKSPACE}/acceptance-test-operator.yaml
 
                     # Install the verrazzano-platform-operator
-                    kubectl apply -f https://github.com/verrazzano/verrazzano/releases/download/v1.5.2/verrazzano-platform-operator.yaml
+                    kubectl apply -f https://github.com/verrazzano/verrazzano/releases/download/${VERSION_FOR_INSTALL}/verrazzano-platform-operator.yaml
 
                     # make sure ns exists
                     ${WORKSPACE}/tests/e2e/config/scripts/check_verrazzano_ns_exists.sh verrazzano-install
@@ -571,7 +579,7 @@ pipeline {
             steps {
                 sh """
                     echo "Install Platform Operator"
-                    oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
+                    oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${VZ_OPERATOR_BRANCH}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
                     cp ${WORKSPACE}/downloaded-operator.yaml ${WORKSPACE}/acceptance-test-operator.yaml
 
                     # Install the verrazzano-platform-operator
