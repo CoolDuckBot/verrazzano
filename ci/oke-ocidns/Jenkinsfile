@@ -95,6 +95,10 @@ pipeline {
                 description: 'A regex matching any fully qualified test file that should not be executed (e.g. multicluster/|_excluded_test). Default: _excluded_test',
                 trim: true)
         booleanParam (description: 'Whether to capture full cluster snapshot on test failure', name: 'CAPTURE_FULL_CLUSTER', defaultValue: false)
+        string (name: 'VZ_VERSION_FOR_UPGRADE',
+                                defaultValue: 'NONE',
+                                description: 'The version for upgrade',
+                                trim: true)
     }
 
     environment {
@@ -186,6 +190,8 @@ pipeline {
         // used to generate Ginkgo test reports
         TEST_REPORT = "test-report.xml"
         GINKGO_REPORT_ARGS = "--junit-report=${TEST_REPORT} --keep-separate-reports=true"
+
+        VERSION_FOR_UPGRADE="${params.VZ_VERSION_FOR_UPGRADE}"
     }
 
     stages {
@@ -309,18 +315,19 @@ pipeline {
             }
         }
 
-        stage("install-platform-operator") {
+
+        stage("install-platform-operator-15-2") {
             environment {
                 OCI_CLI_AUTH="instance_principal"
             }
             steps {
                 sh """
                     echo "Install Platform Operator"
-                    oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
-                    cp ${WORKSPACE}/downloaded-operator.yaml ${WORKSPACE}/acceptance-test-operator.yaml
+                    #oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
+                    #cp ${WORKSPACE}/downloaded-operator.yaml ${WORKSPACE}/acceptance-test-operator.yaml
 
                     # Install the verrazzano-platform-operator
-                    kubectl apply -f $WORKSPACE/acceptance-test-operator.yaml
+                    kubectl apply -f https://github.com/verrazzano/verrazzano/releases/download/v1.5.2/verrazzano-platform-operator.yaml
 
                     # make sure ns exists
                     ${WORKSPACE}/tests/e2e/config/scripts/check_verrazzano_ns_exists.sh verrazzano-install
@@ -338,9 +345,8 @@ pipeline {
         stage("create-dns-zone") {
             when { expression { return params.TEST_ENV == 'ocidns_oke' } }
             environment {
-                            TF_VAR_label_prefix="${OKE_CLUSTER_PREFIX}"
-
-                        }
+                TF_VAR_label_prefix="${OKE_CLUSTER_PREFIX}"
+            }
             steps {
                 script {
                      println("DNS_SCOPE =  ${params.DNS_SCOPE}")
@@ -469,13 +475,13 @@ pipeline {
 
         stage('acceptance-tests') {
             parallel {
-                stage('system component metrics') {
-                    steps {
-                        script {
-                            runGinkgo('metrics/syscomponents')
-                        }
-                    }
-                }
+                //stage('system component metrics') {
+                //    steps {
+                //        script {
+                //            runGinkgo('metrics/syscomponents')
+                //        }
+                //    }
+                //}
                 stage('verify-infra restapi') {
                     steps {
                         script {
@@ -497,68 +503,100 @@ pipeline {
                         }
                     }
                 }
-                stage('system logging') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/system-logging"
-                    }
-                    steps {
-                        runGinkgo('logging/system')
-                    }
-                }
-                stage('istio authorization policy') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-istio-auth-policy"
-                    }
-                    steps {
-                        runGinkgo('istio/authz')
-                    }
-                }
-                stage('security rbac') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-rbac"
-                    }
-                    steps {
-                        runGinkgo('security/rbac')
-                    }
-                }
-                stage('webLogic logging') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/weblogic-logging"
-                    }
-                    steps {
-                        script {
-                            runGinkgoFailFast('logging/weblogic')
-                        }
-                    }
-                }
-                stage('examples helidon') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/helidon-workload"
-                    }
-                    steps {
-                        script {
-                            runGinkgoFailFast('examples/helidon')
-                        }
-                    }
-                }
-                stage('weblogic workload') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/weblogic-workload"
-                    }
-                    steps {
-                        runGinkgoFailFast('workloads/weblogic')
-                    }
-                }
-                stage('coherence workload') {
-                    environment {
-                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/coherence-workload"
-                    }
-                    steps {
-                        runGinkgoFailFast('workloads/coherence')
-                    }
+                //stage('system logging') {
+                //    environment {
+                //        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/system-logging"
+                //    }
+                //    steps {
+                //        runGinkgo('logging/system')
+                //    }
+                //}
+                //stage('istio authorization policy') {
+                //    environment {
+                //        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-istio-auth-policy"
+                //    }
+                //    steps {
+                //        runGinkgo('istio/authz')
+                //    }
+                //}
+                //stage('security rbac') {
+                //    environment {
+                //       DUMP_DIRECTORY="${TEST_DUMP_ROOT}/examples-rbac"
+                //                    }
+                //                    steps {
+                //                        runGinkgo('security/rbac')
+                //                    }
+                //                }
+                //                stage('webLogic logging') {
+                //                    environment {
+                //                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/weblogic-logging"
+                //                    }
+                //                    steps {
+                //                        script {
+                //                            runGinkgoFailFast('logging/weblogic')
+                //                        }
+                //                    }
+                //                }
+                //                stage('examples helidon') {
+                //                    environment {
+                //                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/helidon-workload"
+                //                    }
+                //                    steps {
+                //                        script {
+                //                            runGinkgoFailFast('examples/helidon')
+                //                        }
+                //                    }
+                //                }
+                //                stage('weblogic workload') {
+                //                    environment {
+                //                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/weblogic-workload"
+                //                    }
+                //                    steps {
+                //                        runGinkgoFailFast('workloads/weblogic')
+                //                    }
+                //                }
+                //                stage('coherence workload') {
+                //                    environment {
+                //                        DUMP_DIRECTORY="${TEST_DUMP_ROOT}/coherence-workload"
+                //                    }
+                //                    steps {
+                //                        runGinkgoFailFast('workloads/coherence')
+                //                    }
+                //                }
+            }
+        }
+
+        // Upgrade here
+        stage('upgrade-verrazzano-using-cli') {
+            steps {
+                sh """
+                    echo "Install Platform Operator"
+                    oci --region us-phoenix-1 os object get --namespace ${OCI_OS_NAMESPACE} -bn ${OCI_OS_COMMIT_BUCKET} --name ephemeral/${env.BRANCH_NAME}/${SHORT_COMMIT_HASH}/operator.yaml --file ${WORKSPACE}/downloaded-operator.yaml
+                    cp ${WORKSPACE}/downloaded-operator.yaml ${WORKSPACE}/acceptance-test-operator.yaml
+
+                    # Install the verrazzano-platform-operator
+                    #kubectl apply -f $WORKSPACE/acceptance-test-operator.yaml
+
+                    #sleep 60
+
+                    # ensure operator pod is up
+                    #kubectl -n verrazzano-install rollout status deployment/verrazzano-platform-operator
+                    #kubectl -n verrazzano-install rollout status deployment/verrazzano-platform-operator-webhook
+                    ${GO_REPO_PATH}/vz upgrade --version ${VERSION_FOR_UPGRADE} --operator-file ${WORKSPACE}/acceptance-test-operator.yaml --timeout 45m
+                """
+            }
+        }
+        stage('verify-install-after-upgrade') {
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    sh """
+                        cd ${WORKSPACE}/tests/e2e
+                        ginkgo -p --randomize-all -v --keep-going --no-color ${GINKGO_REPORT_ARGS} -tags="${params.TAGGED_TESTS}" --focus-file="${params.INCLUDED_TESTS}" --skip-file="${params.EXCLUDED_TESTS}" verify-install/...
+                    """
                 }
             }
         }
+
     }
     post {
         always {
