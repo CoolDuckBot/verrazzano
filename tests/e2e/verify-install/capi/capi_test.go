@@ -96,15 +96,20 @@ var beforeSuite = t.BeforeSuiteFunc(func() {
 	if err != nil {
 		AbortSuite(fmt.Sprintf("Failed to check Verrazzano version 1.6.0: %v", err))
 	}
-
+	t.Logs.Infof("CAPI: Before UpdateCRV1beta1WithRetries")
 	if isCAPISupported && !isCAPIInstalled {
+		t.Logs.Infof("CAPI: Inside UpdateCRV1beta1WithRetries")
 		update.UpdateCRV1beta1WithRetries(m, pollingInterval, waitTimeout)
 		isCAPIInstalled = vzcr.IsCAPIEnabled(inClusterVZ)
 	}
+	t.Logs.Infof("CAPI: After UpdateCRV1beta1WithRetries")
 
+	t.Logs.Infof("CAPI: Before Validating BeforeSuite pod count")
 	if isCAPISupported && isCAPIInstalled {
+		t.Logs.Infof("CAPI: Inside Validating BeforeSuite pod count")
 		update.ValidatePods(capiLabelValue, capiLabelKey, constants.VerrazzanoCAPINamespace, uint32(4), false)
 	}
+	t.Logs.Infof("CAPI: After Validating BeforeSuite pod count")
 	inClusterVZ, err = pkg.GetVerrazzanoInstallResourceInClusterV1beta1(kubeconfigPath)
 	if err != nil {
 		AbortSuite(fmt.Sprintf("Failed to get Verrazzano from the cluster: %v", err))
