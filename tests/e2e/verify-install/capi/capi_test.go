@@ -77,14 +77,14 @@ var t = framework.NewTestFramework("capi")
 
 var _ = t.AfterEach(func() {})
 
-var afterSuite = t.AfterSuiteFunc(func() {
-	m := CAPIDisabledModifierV1beta1{}
-
-	if isCAPIInstalled {
-		update.UpdateCRV1beta1WithRetries(m, pollingInterval, waitTimeout)
-		//update.ValidatePods(capiLabelValue, capiLabelKey, constants.VerrazzanoCAPINamespace, uint32(0), false)
-	}
-})
+//var afterSuite = t.AfterSuiteFunc(func() {
+//	m := CAPIDisabledModifierV1beta1{}
+//
+//	if isCAPIInstalled {
+//		update.UpdateCRV1beta1WithRetries(m, pollingInterval, waitTimeout)
+//		//update.ValidatePods(capiLabelValue, capiLabelKey, constants.VerrazzanoCAPINamespace, uint32(0), false)
+//	}
+//})
 
 var beforeSuite = t.BeforeSuiteFunc(func() {
 	m := CAPIEnabledModifierV1beta1{}
