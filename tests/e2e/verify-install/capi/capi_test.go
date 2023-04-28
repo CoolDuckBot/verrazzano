@@ -131,7 +131,7 @@ var _ = t.Describe("Cluster API ", Label("f:platform-lcm.install"), func() {
 	})
 })
 
-var _ = AfterSuite(afterSuite)
+//var _ = AfterSuite(afterSuite)
 
 // 'It' Wrapper to only run spec if the CAPI is supported on the current Verrazzano version and is installed
 func WhenCapiInstalledIt(description string, f func()) {
