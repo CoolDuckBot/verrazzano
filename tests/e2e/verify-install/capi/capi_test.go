@@ -12,6 +12,7 @@ import (
 	"github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
 	"github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1beta1"
 	"github.com/verrazzano/verrazzano/platform-operator/constants"
+	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/capi"
 	"github.com/verrazzano/verrazzano/tests/e2e/pkg"
 	"github.com/verrazzano/verrazzano/tests/e2e/pkg/test/framework"
 	"github.com/verrazzano/verrazzano/tests/e2e/pkg/update"
@@ -27,7 +28,7 @@ const (
 
 var (
 	isCAPISupported bool
-	isCAPIInstalled bool
+	isCAPIEnabled   bool
 	inClusterVZ     *v1beta1.Verrazzano
 )
 
@@ -80,7 +81,7 @@ var _ = t.AfterEach(func() {})
 //var afterSuite = t.AfterSuiteFunc(func() {
 //	m := CAPIDisabledModifierV1beta1{}
 //
-//	if isCAPIInstalled {
+//	if isCAPIEnabled {
 //		update.UpdateCRV1beta1WithRetries(m, pollingInterval, waitTimeout)
 //		//update.ValidatePods(capiLabelValue, capiLabelKey, constants.VerrazzanoCAPINamespace, uint32(0), false)
 //	}
@@ -91,21 +92,21 @@ var beforeSuite = t.BeforeSuiteFunc(func() {
 	var err error
 	kubeconfigPath := getKubeConfigOrAbort()
 
-	isCAPIInstalled = vzcr.IsCAPIEnabled(inClusterVZ)
+	isCAPIEnabled = vzcr.IsComponentStatusEnabled(inClusterVZ, capi.ComponentName)
 	isCAPISupported, err = pkg.IsVerrazzanoMinVersion("1.6.0", kubeconfigPath)
 	if err != nil {
 		AbortSuite(fmt.Sprintf("Failed to check Verrazzano version 1.6.0: %v", err))
 	}
 	t.Logs.Infof("CAPI: Before UpdateCRV1beta1WithRetries")
-	if isCAPISupported && !isCAPIInstalled {
+	if isCAPISupported && !isCAPIEnabled {
 		t.Logs.Infof("CAPI: Inside UpdateCRV1beta1WithRetries")
 		update.UpdateCRV1beta1WithRetries(m, pollingInterval, waitTimeout)
-		isCAPIInstalled = vzcr.IsCAPIEnabled(inClusterVZ)
+		isCAPIEnabled = vzcr.IsCAPIEnabled(inClusterVZ)
 	}
 	t.Logs.Infof("CAPI: After UpdateCRV1beta1WithRetries")
 
 	t.Logs.Infof("CAPI: Before Validating BeforeSuite pod count")
-	if isCAPISupported && isCAPIInstalled {
+	if isCAPISupported && isCAPIEnabled {
 		t.Logs.Infof("CAPI: Inside Validating BeforeSuite pod count")
 		update.ValidatePods(capiLabelValue, capiLabelKey, constants.VerrazzanoCAPINamespace, uint32(4), false)
 	}
@@ -141,8 +142,8 @@ var _ = t.Describe("Cluster API ", Label("f:platform-lcm.install"), func() {
 // 'It' Wrapper to only run spec if the CAPI is supported on the current Verrazzano version and is installed
 func WhenCapiInstalledIt(description string, f func()) {
 	t.It(description, func() {
-		isCAPIInstalled = vzcr.IsCAPIEnabled(inClusterVZ)
-		if isCAPISupported && isCAPIInstalled {
+		isCAPIEnabled = vzcr.IsCAPIEnabled(inClusterVZ)
+		if isCAPISupported && isCAPIEnabled {
 			f()
 		} else {
 			t.Logs.Infof("Skipping check '%v', Cluster API  is not installed on this cluster", description)
