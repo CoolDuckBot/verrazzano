@@ -432,12 +432,26 @@ pipeline {
                 stage("Build Product Zip") {
                     steps {
                         script {
+                            try {
+                                sh """
+                                     echo "${OCR_CREDS_PSW}" | docker login -u ${OCR_CREDS_USR} ${OCR_REPO} --password-stdin
+                                """
+                            } catch(error) {
+                                echo "OCIR docker login at ${OCIR_REPO} failed, retrying after sleep"
+                                retry(4) {
+                                    sleep(30)
+                                    sh """
+                                        echo "${OCR_CREDS_PSW}" | docker login -u ${OCR_CREDS_USR} ${OCR_REPO} --password-stdin
+                                    """
+                                }
+                            }
+                        }
+                        script {
                             sh """
                                 ci/scripts/generate_vz_distribution.sh ${WORKSPACE} ${VERRAZZANO_DEV_VERSION} ${SHORT_COMMIT_HASH}
                             """
                         }
                     }
-                }
                 stage("Private Registry Test") {
                     steps {
                         script {
