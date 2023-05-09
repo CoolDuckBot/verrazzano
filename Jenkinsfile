@@ -106,7 +106,7 @@ pipeline {
         OCI_OS_BUCKET="verrazzano-builds"
         OCI_OS_COMMIT_BUCKET="verrazzano-builds-by-commit"
         OCI_OS_REGION="us-phoenix-1"
-
+        OCI_OS_DIST_REGION="eu-frankfurt-1"
         // used to emit metrics
         PROMETHEUS_CREDENTIALS = credentials('prometheus-credentials')
 
