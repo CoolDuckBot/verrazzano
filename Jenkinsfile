@@ -429,7 +429,7 @@ pipeline {
                 }
             }
             stages{
-                stage("Build Product Zip") {
+               stage("Build Product Zip") {
                     steps {
                         script {
                             try {
@@ -452,6 +452,7 @@ pipeline {
                             """
                         }
                     }
+               }
                 stage("Private Registry Test") {
                     steps {
                         script {
