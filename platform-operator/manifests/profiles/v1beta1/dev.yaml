@@ -4,6 +4,8 @@ spec:
   defaultVolumeSource:
     emptyDir: { }
   components:
+    capi:
+      enabled: true
     opensearch:
       nodes:
         - name: es-master
