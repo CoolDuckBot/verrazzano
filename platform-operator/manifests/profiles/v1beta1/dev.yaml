@@ -4,7 +4,7 @@ spec:
   defaultVolumeSource:
     emptyDir: { }
   components:
-    cert-manager:
+    certManager:
       enabled: true
     capi:
       enabled: true
