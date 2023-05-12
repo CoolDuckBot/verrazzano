@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.6.8
 	github.com/mattn/go-isatty v0.0.16
 	github.com/onsi/ginkgo/v2 v2.6.0
-	github.com/onsi/gomega v1.24.1
+	github.com/onsi/gomega v1.25.4
 	github.com/oracle/oci-go-sdk/v53 v53.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.59.1

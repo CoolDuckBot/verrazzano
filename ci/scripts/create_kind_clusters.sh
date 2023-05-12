@@ -51,6 +51,8 @@ create_kind_cluster() {
     KIND_IMAGE="kindest/node:v1.24.0@sha256:0866296e693efe1fed79d5e6c7af8df71fc73ae45e3679af05342239cdc5bc8e"
   elif [ ${K8S_VERSION} == 1.25 ]; then
     KIND_IMAGE="ghcr.io/verrazzano/kind-jenkins:v1.25.8-20230510051659-10f25717"
+  elif [ ${K8S_VERSION} == 1.26 ]; then
+      KIND_IMAGE="ghcr.io/verrazzano/kind:v1.26.3-20230512053749-7d934451"
   else
     echo "ERROR: Invalid value for Kubernetes Version ${K8S_VERSION}."
     exit 1

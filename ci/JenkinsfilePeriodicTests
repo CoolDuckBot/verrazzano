@@ -228,13 +228,13 @@ pipeline {
                        }
                    }
                }
-                stage('Kind Acceptance Tests With HA and Grafana DB on 1.25') {
+                stage('Kind Acceptance Tests With HA and Grafana DB on 1.26') {
                     steps {
                         retry(count: JOB_PROMOTION_RETRIES) {
                             script {
                                 build job: "/verrazzano-new-kind-acceptance-tests/${CLEAN_BRANCH_NAME}",
                                     parameters: [
-                                        string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.25'),
+                                        string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.26'),
                                         string(name: 'GIT_COMMIT_TO_USE', value: env.GIT_COMMIT),
                                         string(name: 'TAGGED_TESTS', value: params.TAGGED_TESTS),
                                         string(name: 'INCLUDED_TESTS', value: params.INCLUDED_TESTS),
@@ -304,7 +304,7 @@ pipeline {
                             script {
                                 build job: "/verrazzano-a-la-carte/${CLEAN_BRANCH_NAME}",
                                         parameters: [
-                                                string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.25'),
+                                                string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.26'),
                                                 string(name: 'GIT_COMMIT_TO_USE', value: env.GIT_COMMIT),
                                         ], wait: true
                             }
@@ -352,14 +352,14 @@ pipeline {
                         }
                     }
                 }
-                stage('Kind Acceptance Tests on 1.25 Non-Calico') {
+                stage('Kind Acceptance Tests on 1.26 Non-Calico') {
                     steps {
                         retry(count: JOB_PROMOTION_RETRIES) {
                             script {
                                 // Do not use Calico
                                 build job: "verrazzano-new-kind-acceptance-tests/${CLEAN_BRANCH_NAME}",
                                     parameters: [
-                                        string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.25'),
+                                        string(name: 'KUBERNETES_CLUSTER_VERSION', value: '1.26'),
                                         string(name: 'GIT_COMMIT_TO_USE', value: env.GIT_COMMIT),
                                         booleanParam(name: 'CREATE_CLUSTER_USE_CALICO', value: false),
                                         string(name: 'TAGGED_TESTS', value: params.TAGGED_TESTS),
