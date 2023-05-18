@@ -156,8 +156,9 @@ func ConvertClusterIssuerToV1Beta1(src *ClusterIssuerComponent) *v1beta1.Cluster
 		return nil
 	}
 	return &v1beta1.ClusterIssuerComponent{
-		Enabled:     src.Enabled,
-		Certificate: convertCertificateToV1Beta1(src.Certificate),
+		Enabled:                  src.Enabled,
+		ClusterResourceNamespace: src.ClusterResourceNamespace,
+		Certificate:              convertCertificateToV1Beta1(src.Certificate),
 	}
 }
 

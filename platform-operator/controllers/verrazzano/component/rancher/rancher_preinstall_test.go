@@ -109,11 +109,11 @@ func TestIsUsingDefaultCACertificate(t *testing.T) {
 		*vzapi.CertManagerComponent
 		out bool
 	}{
-		//{
-		//	"no CA",
-		//	nil,
-		//	false,
-		//},
+		{
+			"no CA",
+			nil,
+			false,
+		},
 		{
 			"acme CA",
 			vzAcmeDev.Spec.Components.CertManager,
@@ -128,7 +128,7 @@ func TestIsUsingDefaultCACertificate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			assert.Equal(t, tt.out, isUsingDefaultCACertificate(tt.CertManagerComponent.Certificate))
+			assert.Equal(t, tt.out, isUsingDefaultCACertificate(tt.CertManagerComponent))
 		})
 	}
 }

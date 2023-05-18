@@ -39,7 +39,7 @@ const ComponentNamespace = vzconst.CertManagerNamespace
 const ComponentJSONName = cmcommon.CertManagerComponentJSONName
 
 // ExternalDNSComponentJSONName is the JSON name of the verrazzano component in CRD
-const ExternalDNSComponentJSONName = cmcommon.ExternalDNSComponentJSONName
+//const ExternalDNSComponentJSONName = cmcommon.ExternalDNSComponentJSONName
 
 // certManagerComponent represents an CertManager component
 type certManagerComponent struct {
@@ -133,7 +133,7 @@ func (c certManagerComponent) ValidateInstallV1Beta1(vz *v1beta1.Verrazzano) err
 	}
 
 	// Can not enable both CM and External CM
-	if err := cmcommon.ValidateCertManagerConfiguration(vz); err != nil {
+	if err := cmcommon.ValidateConfiguration(vz); err != nil {
 		return err
 	}
 
@@ -153,7 +153,7 @@ func (c certManagerComponent) ValidateUpdateV1Beta1(old *v1beta1.Verrazzano, new
 	}
 
 	// Can not enable both CM and External CM
-	if err := cmcommon.ValidateCertManagerConfiguration(new); err != nil {
+	if err := cmcommon.ValidateConfiguration(new); err != nil {
 		return err
 	}
 
@@ -211,7 +211,7 @@ func (c certManagerComponent) MonitorOverrides(ctx spi.ComponentContext) bool {
 	return false
 }
 
-func checkExistingCertManager(vz runtime.Object) error {
+func checkExistingCertManager(_ runtime.Object) error {
 	// Check if the cert-manager namespace already exists and is not owned by Verrazzano
 	client, err := k8sutil.GetCoreV1Func()
 	if err != nil {

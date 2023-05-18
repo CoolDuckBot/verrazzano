@@ -19,13 +19,13 @@ import (
 )
 
 // ComponentName is the name of the component
-const ComponentName = cmcommon.CertManagerConfigComponentName
+const ComponentName = cmcommon.ClusterIssuerConfigComponentName
 
 // ComponentNamespace is the namespace of the component
 const ComponentNamespace = vzconst.CertManagerNamespace
 
 // ComponentJSONName - this is not a real component but declare it for compatibility
-const ComponentJSONName = "certManagerConfig"
+const ComponentJSONName = "clusterIssuer"
 
 // certManagerConfigComponent represents an CertManager component
 type certManagerConfigComponent struct {
@@ -52,7 +52,7 @@ func NewComponent() spi.Component {
 
 // IsEnabled returns true if the cert-manager-config is enabled, which is the default
 func (c certManagerConfigComponent) IsEnabled(effectiveCR runtime.Object) bool {
-	return vzcr.IsAnyCertManagerEnabled(effectiveCR)
+	return vzcr.IsClusterIssuerEnabled(effectiveCR)
 }
 
 // IsReady component check
@@ -174,17 +174,7 @@ func (c certManagerConfigComponent) validateConfiguration(new *v1beta1.Verrazzan
 		return nil
 	}
 
-	cm := new.Spec.Components.CertManager
-	extCM := new.Spec.Components.ExternalCertManager
-	if cm == nil && extCM == nil {
-		return nil
-	}
-
-	cmConfig, err := cmcommon.GetCertManagerConfiguration(new)
-	if err != nil {
-		return err
-	}
-	if err := cmcommon.ValidateConfiguration(cmConfig); err != nil {
+	if err := cmcommon.ValidateConfiguration(new); err != nil {
 		return err
 	}
 	return nil

@@ -12,12 +12,14 @@ import (
 	vzapi "github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
 	"github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1beta1"
 	cmcommonfake "github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/certmanager/common/fake"
+	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/spi"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8scheme "k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"testing"
 )
 
@@ -133,7 +135,9 @@ func TestIsCATrue(t *testing.T) {
 	defer func() { GetClientFunc = k8sutil.GetCoreV1Client }()
 	GetClientFunc = createClientFunc(localvz.Spec.Components.CertManager.Certificate.CA, "defaultVZConfig-cn")
 
-	isCAValue, err := IsCAConfigured(localvz)
+	client := fake.NewClientBuilder().WithScheme(testScheme).Build()
+
+	isCAValue, err := IsCA(spi.NewFakeContext(client, localvz, nil, false, profileDir))
 	assert.Nil(t, err)
 	assert.True(t, isCAValue)
 }
@@ -176,7 +180,8 @@ func createCertSecretNoParent(name string, namespace string, cn string) (*v1.Sec
 func TestIsCAFalse(t *testing.T) {
 	localvz := defaultVZConfig.DeepCopy()
 	localvz.Spec.Components.CertManager.Certificate.Acme = acme
-	isCAValue, err := IsCAConfigured(localvz)
+	client := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	isCAValue, err := IsCA(spi.NewFakeContext(client, localvz, nil, false, profileDir))
 	assert.Nil(t, err)
 	assert.False(t, isCAValue)
 }
@@ -186,7 +191,8 @@ func TestIsCAFalse(t *testing.T) {
 // WHEN the CertManager component is populated by the profile
 // THEN true is returned
 func TestIsCANilWithProfile(t *testing.T) {
-	isCAValue, err := IsCAConfigured(&vzapi.Verrazzano{})
+	client := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	isCAValue, err := IsCA(spi.NewFakeContext(client, &vzapi.Verrazzano{}, nil, false, profileDir))
 	assert.Nil(t, err)
 	assert.True(t, isCAValue)
 }
@@ -199,8 +205,8 @@ func TestIsCABothPopulated(t *testing.T) {
 	localvz := defaultVZConfig.DeepCopy()
 	localvz.Spec.Components.CertManager.Certificate.CA = ca
 	localvz.Spec.Components.CertManager.Certificate.Acme = acme
-
-	_, err := IsCAConfigured(localvz)
+	client := fake.NewClientBuilder().WithScheme(testScheme).Build()
+	_, err := IsCA(spi.NewFakeContext(client, localvz, nil, false, profileDir))
 	assert.Error(t, err)
 }
 

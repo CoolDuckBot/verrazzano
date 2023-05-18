@@ -40,21 +40,10 @@ func GetEffectiveCR(actualCR *v1alpha1.Verrazzano) (*v1alpha1.Verrazzano, error)
 		return nil, err
 	}
 	effectiveCR.Status = v1alpha1.VerrazzanoStatus{} // Don't replicate the CR status in the effective config
-	// if Certificate in CertManager is empty, set it to default CA
-	var emptyCertConfig = v1alpha1.Certificate{}
-	if effectiveCR.Spec.Components.CertManager.Certificate == emptyCertConfig {
-		effectiveCR.Spec.Components.CertManager.Certificate.CA = v1alpha1.CA{
-			SecretName:               constants.DefaultVerrazzanoCASecretName,
-			ClusterResourceNamespace: constants.CertManagerNamespace,
-		}
-	}
-	externalCertManager := effectiveCR.Spec.Components.ExternalCertManager
-	if externalCertManager != nil && externalCertManager.Certificate == emptyCertConfig {
-		externalCertManager.Certificate.CA = v1alpha1.CA{
-			SecretName:               constants.DefaultVerrazzanoCASecretName,
-			ClusterResourceNamespace: constants.CertManagerNamespace,
-		}
-	}
+
+	// Align the ClusterIssuer configurations between CertManager and ClusterIssuer components
+	alignClusterIssuerConfigV1Alpha1(effectiveCR)
+
 	return effectiveCR, nil
 }
 
@@ -80,20 +69,73 @@ func GetEffectiveV1beta1CR(actualCR *v1beta1.Verrazzano) (*v1beta1.Verrazzano, e
 		return nil, err
 	}
 	effectiveCR.Status = v1beta1.VerrazzanoStatus{} // Don't replicate the CR status in the effective config
+
+	// Align the ClusterIssuer configurations between CertManager and ClusterIssuer components
+	alignClusterIssuerConfigV1Beta1(effectiveCR)
+
+	return effectiveCR, nil
+}
+
+// alignClusterIssuerConfigV1Alpha1 aligns the ClusterIssuer configurations between CertManager and the newer ClusterIssuer
+// configurations.  The webhook validators will ensure only one is set to a non-defaulted value, so if one is
+// configured align it with the other.
+func alignClusterIssuerConfigV1Beta1(effectiveCR *v1beta1.Verrazzano) {
 	// if Certificate in CertManager is empty, set it to default CA
 	var emptyCertConfig = v1beta1.Certificate{}
-	if effectiveCR.Spec.Components.CertManager.Certificate == emptyCertConfig {
-		effectiveCR.Spec.Components.CertManager.Certificate.CA = v1beta1.CA{
+	defaultCertConfig := v1beta1.Certificate{
+		CA: v1beta1.CA{
 			SecretName:               constants.DefaultVerrazzanoCASecretName,
 			ClusterResourceNamespace: constants.CertManagerNamespace,
-		}
+		},
 	}
-	externalCertManager := effectiveCR.Spec.Components.ExternalCertManager
-	if externalCertManager != nil && externalCertManager.Certificate == emptyCertConfig {
-		externalCertManager.Certificate.CA = v1beta1.CA{
+
+	certManagerConfig := effectiveCR.Spec.Components.CertManager
+	if certManagerConfig.Certificate == emptyCertConfig {
+		certManagerConfig.Certificate = defaultCertConfig
+	}
+	clusterIssuerConfig := effectiveCR.Spec.Components.ClusterIssuer
+	if clusterIssuerConfig == nil {
+		trueVal := true
+		clusterIssuerConfig = &v1beta1.ClusterIssuerComponent{Enabled: &trueVal}
+	}
+	// if Certificate in CertManager is empty/defaulted, align it with the ClusterIssuer config
+	if clusterIssuerConfig.Certificate == emptyCertConfig || clusterIssuerConfig.Certificate == defaultCertConfig {
+		clusterIssuerConfig.Certificate = certManagerConfig.Certificate
+	}
+	// if Certificate in ClusterIssuer is empty/defaulted, align it with the CertManager config
+	if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
+		certManagerConfig.Certificate = clusterIssuerConfig.Certificate
+	}
+}
+
+// alignClusterIssuerConfigV1Alpha1 aligns the ClusterIssuer configurations between CertManager and the newer ClusterIssuer
+// configurations.  The webhook validators will ensure only one is set to a non-defaulted value, so if one is
+// configured align it with the other.
+func alignClusterIssuerConfigV1Alpha1(effectiveCR *v1alpha1.Verrazzano) {
+	// if Certificate in CertManager is empty, set it to default CA
+	var emptyCertConfig = v1alpha1.Certificate{}
+	defaultCertConfig := v1alpha1.Certificate{
+		CA: v1alpha1.CA{
 			SecretName:               constants.DefaultVerrazzanoCASecretName,
 			ClusterResourceNamespace: constants.CertManagerNamespace,
-		}
+		},
 	}
-	return effectiveCR, nil
+
+	certManagerConfig := effectiveCR.Spec.Components.CertManager
+	if certManagerConfig.Certificate == emptyCertConfig {
+		certManagerConfig.Certificate = defaultCertConfig
+	}
+	clusterIssuerConfig := effectiveCR.Spec.Components.ClusterIssuer
+	if clusterIssuerConfig == nil {
+		trueVal := true
+		clusterIssuerConfig = &v1alpha1.ClusterIssuerComponent{Enabled: &trueVal}
+	}
+	// if Certificate in CertManager is empty/defaulted, align it with the ClusterIssuer config
+	if clusterIssuerConfig.Certificate == emptyCertConfig || clusterIssuerConfig.Certificate == defaultCertConfig {
+		clusterIssuerConfig.Certificate = certManagerConfig.Certificate
+	}
+	// if Certificate in ClusterIssuer is empty/defaulted, align it with the CertManager config
+	if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
+		certManagerConfig.Certificate = clusterIssuerConfig.Certificate
+	}
 }

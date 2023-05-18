@@ -6,14 +6,13 @@ package common
 import (
 	"context"
 	"fmt"
+	"github.com/verrazzano/verrazzano/pkg/vzcr"
 	"io"
 	"net/http"
 
 	"github.com/verrazzano/verrazzano/pkg/constants"
 	"github.com/verrazzano/verrazzano/pkg/log/vzlog"
-	"github.com/verrazzano/verrazzano/pkg/vzcr"
 	vzapi "github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
-	cmcommon "github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/certmanager/common"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,17 +80,14 @@ func ProcessAdditionalCertificates(log vzlog.VerrazzanoLogger, cli client.Client
 	if !vzcr.IsRancherEnabled(vz) {
 		return nil
 	}
-	cmConfig, err := cmcommon.GetCertManagerConfiguration(vz)
-	if err != nil {
-		return err
-	}
+	cm := vz.Spec.Components.CertManager
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: CattleSystem,
 			Name:      constants.AdditionalTLS,
 		},
 	}
-	if useAdditionalCAs(cmConfig.Certificate.Acme) {
+	if cm != nil && useAdditionalCAs(cm.Certificate.Acme) {
 		log.Debugf("Creating additional Rancher certificates for non-production environment")
 		return createAdditionalCertificates(log, cli, secret)
 	}

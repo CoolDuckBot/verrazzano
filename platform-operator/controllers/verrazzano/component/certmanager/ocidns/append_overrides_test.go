@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/verrazzano/verrazzano/pkg/constants"
 	vzapi "github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
 	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/spi"
 	k8scheme "k8s.io/client-go/kubernetes/scheme"
@@ -17,13 +16,14 @@ import (
 
 // All of this below is to make Sonar happy
 type appendOverridesTest struct {
-	testName                  string
-	config                    *vzapi.Verrazzano
-	expectedNamespace         string
-	exectedSA                 string
-	expectedResourceNamespace string
-	expectErr                 bool
+	testName  string
+	config    *vzapi.Verrazzano
+	expectErr bool
 }
+
+var (
+	enabled = true
+)
 
 // Test_appendOCIDNSOverrides tests the appendOCIDNSOverrides function
 // GIVEN a call to appendOCIDNSOverrides
@@ -32,108 +32,7 @@ type appendOverridesTest struct {
 func Test_appendOCIDNSOverrides(t *testing.T) {
 	asserts := assert.New(t)
 
-	const (
-		mycmNamespace       = "mycm"
-		mySA                = "my-service-account"
-		myResourceNamespace = "my-cluster-resource-ns"
-	)
-
-	ociDNSConfig := &vzapi.DNSComponent{
-		OCI: &vzapi.OCI{
-			OCIConfigSecret: "oci",
-		},
-	}
 	tests := []appendOverridesTest{
-		{
-			testName: "Default CM",
-			config: &vzapi.Verrazzano{
-				Spec: vzapi.VerrazzanoSpec{
-					Components: vzapi.ComponentSpec{
-						DNS: ociDNSConfig,
-					},
-				},
-			},
-			expectedNamespace:         constants.CertManagerNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: constants.CertManagerNamespace,
-		},
-		{
-			testName: "Enabled CM",
-			config: &vzapi.Verrazzano{
-				Spec: vzapi.VerrazzanoSpec{
-					Components: vzapi.ComponentSpec{
-						CertManager: &vzapi.CertManagerComponent{
-							Enabled: &enabled,
-						},
-						DNS: ociDNSConfig,
-					},
-				},
-			},
-			expectedNamespace:         constants.CertManagerNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: constants.CertManagerNamespace,
-		},
-		{
-			testName: "External CM",
-			config: &vzapi.Verrazzano{
-				Spec: vzapi.VerrazzanoSpec{
-					Components: vzapi.ComponentSpec{
-						CertManager: &vzapi.CertManagerComponent{
-							Enabled: &disabled,
-						},
-						ExternalCertManager: &vzapi.ExternalCertManagerComponent{
-							Enabled: &enabled,
-						},
-						DNS: ociDNSConfig,
-					},
-				},
-			},
-			expectedNamespace:         constants.CertManagerNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: constants.CertManagerNamespace,
-		},
-		{
-			testName: "External CM Namespace Override",
-			config: &vzapi.Verrazzano{
-				Spec: vzapi.VerrazzanoSpec{
-					Components: vzapi.ComponentSpec{
-						CertManager: &vzapi.CertManagerComponent{
-							Enabled: &disabled,
-						},
-						ExternalCertManager: &vzapi.ExternalCertManagerComponent{
-							Enabled:   &enabled,
-							Namespace: mycmNamespace,
-						},
-						DNS: ociDNSConfig,
-					},
-				},
-			},
-			expectedNamespace:         mycmNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: mycmNamespace,
-		},
-		{
-			testName: "External CM All Override",
-			config: &vzapi.Verrazzano{
-				Spec: vzapi.VerrazzanoSpec{
-					Components: vzapi.ComponentSpec{
-						CertManager: &vzapi.CertManagerComponent{
-							Enabled: &disabled,
-						},
-						ExternalCertManager: &vzapi.ExternalCertManagerComponent{
-							Enabled:                  &enabled,
-							Namespace:                mycmNamespace,
-							ClusterResourceNamespace: myResourceNamespace,
-							ServiceAccountName:       mySA,
-						},
-						DNS: ociDNSConfig,
-					},
-				},
-			},
-			expectedNamespace:         mycmNamespace,
-			exectedSA:                 mySA,
-			expectedResourceNamespace: myResourceNamespace,
-		},
 		{
 			testName:  "OCI DNS Not configured",
 			config:    &vzapi.Verrazzano{},
@@ -163,14 +62,15 @@ func Test_appendOCIDNSOverrides(t *testing.T) {
 						CertManager: &vzapi.CertManagerComponent{
 							Enabled: &enabled,
 						},
-						DNS: ociDNSConfig,
+						DNS: &vzapi.DNSComponent{
+							OCI: &vzapi.OCI{
+								OCIConfigSecret: "oci",
+							},
+						},
 					},
 				},
 			},
-			expectedNamespace:         constants.CertManagerNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: constants.CertManagerNamespace,
-			expectErr:                 false,
+			expectErr: false,
 		},
 		{
 			testName: "OCI DNS Secret configured alternate name ",
@@ -188,21 +88,17 @@ func Test_appendOCIDNSOverrides(t *testing.T) {
 					},
 				},
 			},
-			expectedNamespace:         constants.CertManagerNamespace,
-			exectedSA:                 constants.CertManagerNamespace,
-			expectedResourceNamespace: constants.CertManagerNamespace,
-			expectErr:                 false,
+			expectErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			client := fake.NewClientBuilder().WithScheme(k8scheme.Scheme).Build()
 			fakeContext := spi.NewFakeContext(client, tt.config, nil, false)
-			resolvedNamespace := resolveCertManagerNamespace(fakeContext, "cert-manager")
 
 			var overrides []bom.KeyValue
 			var err error
-			overrides, err = appendOCIDNSOverrides(fakeContext, "", resolvedNamespace, "", overrides)
+			overrides, err = appendOCIDNSOverrides(fakeContext, "", "", "", overrides)
 
 			// Check error condition
 			if tt.expectErr {
@@ -218,16 +114,10 @@ func Test_appendOCIDNSOverrides(t *testing.T) {
 
 			assert.NoError(t, err)
 
-			assert.Len(t, overrides, 4)
+			assert.Len(t, overrides, 2)
 
 			asserts.Equal("ociAuthSecrets[0]", overrides[0].Key)
 			asserts.Equal(tt.config.Spec.Components.DNS.OCI.OCIConfigSecret, overrides[0].Value)
-			asserts.Equal("certManager.namespace", overrides[1].Key)
-			asserts.Equal(tt.expectedNamespace, overrides[1].Value)
-			asserts.Equal("certManager.clusterResourceNamespace", overrides[2].Key)
-			asserts.Equal(tt.expectedResourceNamespace, overrides[2].Value)
-			asserts.Equal("certManager.serviceAccountName", overrides[3].Key)
-			asserts.Equal(tt.exectedSA, overrides[3].Value)
 		})
 	}
 }

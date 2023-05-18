@@ -325,7 +325,7 @@ type ComponentSpec struct {
 
 	// CertManagerOCIDNSWebhook configures the Verrazzano OCI DNS webhook plugin for Cert-Manager
 	// +optional
-	CertManagerOCIDNSWebhook *CertManagerOCIDNSWebhookSolverComponent `json:"certManagerOCIDNSWebhook,omitempty"`
+	CertManagerOCIDNSWebhook *CertManagerOCIDNSWebhookSolverComponent `json:"certManagerOCIWebhook,omitempty"`
 
 	// The Cluster Operator component configuration.
 	// +optional
@@ -613,6 +613,9 @@ type ClusterIssuerComponent struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
+	// The clusterResourceNamespace configured for this Cert-Manager instance
+	// +kubebuilder:default=cert-manager
+	ClusterResourceNamespace string `json:"clusterResourceNamespace,omitempty"`
 	// The certificate configuration.
 	// +optional
 	// +patchStrategy=replace
@@ -625,6 +628,8 @@ type CertManagerOCIDNSWebhookSolverComponent struct {
 	// If true, indicates that Verrazzano will use an externally-managed Cert-Manager installation
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
+	// The clusterResourceNamespace configured for this Cert-Manager instance
+	ClusterResourceNamespace string `json:"clusterResourceNamespace,omitempty"`
 	// List of Overrides for the default `values.yaml` file for the component Helm chart. Overrides are merged together,
 	// but in the event of conflicting fields, the last override in the list takes precedence over any others. You can
 	// find all possible values

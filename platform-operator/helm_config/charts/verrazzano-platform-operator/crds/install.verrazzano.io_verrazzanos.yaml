@@ -601,44 +601,8 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                           type: object
                         type: array
-                      webhook:
-                        properties:
-                          monitorChanges:
-                            type: boolean
-                          overrides:
-                            items:
-                              properties:
-                                configMapRef:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                secretRef:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                                values:
-                                  x-kubernetes-preserve-unknown-fields: true
-                              type: object
-                            type: array
-                        type: object
                     type: object
-                  certManagerOCIDNSWebhook:
+                  certManagerOCIWebhook:
                     properties:
                       enabled:
                         type: boolean
@@ -699,6 +663,9 @@ spec:
                         - clusterResourceNamespace
                         - secretName
                         type: object
+                      clusterResourceNamespace:
+                        default: cert-manager
+                        type: string
                       enabled:
                         default: true
                         type: boolean
@@ -4551,8 +4518,10 @@ spec:
                           type: object
                         type: array
                     type: object
-                  certManagerOCIDNSWebhook:
+                  certManagerOCIWebhook:
                     properties:
+                      clusterResourceNamespace:
+                        type: string
                       enabled:
                         type: boolean
                       monitorChanges:
@@ -4612,6 +4581,9 @@ spec:
                         - clusterResourceNamespace
                         - secretName
                         type: object
+                      clusterResourceNamespace:
+                        default: cert-manager
+                        type: string
                       enabled:
                         default: true
                         type: boolean

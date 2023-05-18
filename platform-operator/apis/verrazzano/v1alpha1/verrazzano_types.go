@@ -335,7 +335,7 @@ type ComponentSpec struct {
 
 	// CertManagerOCIDNSWebhook configures the Verrazzano OCI DNS webhook plugin for Cert-Manager
 	// +optional
-	CertManagerOCIDNSWebhook *CertManagerOCIDNSWebhookSolverComponent `json:"certManagerOCIDNSWebhook,omitempty"`
+	CertManagerOCIDNSWebhook *CertManagerOCIDNSWebhookSolverComponent `json:"certManagerOCIWebhook,omitempty"`
 
 	// The Cluster Operator component configuration.
 	// +optional
@@ -631,9 +631,6 @@ type CertManagerComponent struct {
 	// If true, then cert-manager will be installed.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
-	// Optional configuration for the OCI DNS webhook solver
-	// +optional
-	Webhook *CertManagerOCIDNSWebhookSolver `json:"webhook,omitempty"`
 	// List of Overrides for the default `values.yaml` file for the component Helm chart. Overrides are merged together,
 	// but in the event of conflicting fields, the last override in the list takes precedence over any others. You can
 	// find all possible values
@@ -649,6 +646,9 @@ type ClusterIssuerComponent struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
+	// The clusterResourceNamespace configured for this Cert-Manager instance
+	// +kubebuilder:default=cert-manager
+	ClusterResourceNamespace string `json:"clusterResourceNamespace,omitempty"`
 	// The certificate configuration.
 	// +optional
 	// +patchStrategy=replace
@@ -1169,7 +1169,7 @@ type Acme struct {
 
 // CA identifies the Certificate Authority cert issuer.
 type CA struct {
-	// The secret namespace.
+	// Deprecated, use the ClusterIssuerComponent ClusterResourceNamespace field instead
 	ClusterResourceNamespace string `json:"clusterResourceNamespace"`
 	// The secret name.
 	SecretName string `json:"secretName"`

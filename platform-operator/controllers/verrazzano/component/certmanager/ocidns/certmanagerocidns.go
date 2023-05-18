@@ -10,7 +10,7 @@ import (
 	"github.com/verrazzano/verrazzano/pkg/k8s/ready"
 	vzresource "github.com/verrazzano/verrazzano/pkg/k8s/resource"
 	"github.com/verrazzano/verrazzano/pkg/vzcr"
-	cmcommon "github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/certmanager/common"
+	vzapi "github.com/verrazzano/verrazzano/platform-operator/apis/verrazzano/v1alpha1"
 	"github.com/verrazzano/verrazzano/platform-operator/controllers/verrazzano/component/spi"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,10 +32,6 @@ func isCertManagerOciDNSReady(context spi.ComponentContext) bool {
 	return ready.DeploymentsAreReady(context.Log(), context.Client(), deployments, 1, prefix)
 }
 
-func resolveCertManagerNamespace(ctx spi.ComponentContext, _ string) string {
-	return constants.VerrazzanoSystemNamespace
-}
-
 func appendOCIDNSOverrides(ctx spi.ComponentContext, _ string, namespace string, _ string, kvs []bom.KeyValue) ([]bom.KeyValue, error) {
 
 	secretName, err := GetOCIDNSSecretName(ctx)
@@ -43,16 +39,9 @@ func appendOCIDNSOverrides(ctx spi.ComponentContext, _ string, namespace string,
 		return kvs, err
 	}
 
-	cmConfig, err := cmcommon.GetCertManagerConfiguration(ctx.EffectiveCR())
-	if err != nil {
-		return kvs, err
-	}
-
 	overrides := []bom.KeyValue{
 		{Key: "ociAuthSecrets[0]", Value: secretName},
-		{Key: "certManager.namespace", Value: cmConfig.Namespace},
-		{Key: "certManager.clusterResourceNamespace", Value: cmConfig.ClusterResourceNamespace},
-		{Key: "certManager.serviceAccountName", Value: cmConfig.ServiceAccountName},
+		{Key: "certManager.clusterResourceNamespace", Value: getClusterResourceNamespace(ctx.EffectiveCR())},
 	}
 
 	return append(kvs, overrides...), nil
@@ -78,14 +67,9 @@ func (c certManagerOciDNSComponent) postUninstall(ctx spi.ComponentContext) erro
 	}
 	ociDNS := dns.OCI
 
-	cmConfig, err := cmcommon.GetCertManagerConfiguration(ctx.EffectiveCR())
-	if err != nil {
-		return err
-	}
-
-	err = vzresource.Resource{
+	err := vzresource.Resource{
 		Name:      ociDNS.OCIConfigSecret,
-		Namespace: cmConfig.ClusterResourceNamespace,
+		Namespace: getClusterResourceNamespace(ctx.EffectiveCR()),
 		Client:    ctx.Client(),
 		Object:    &corev1.Secret{},
 		Log:       ctx.Log(),
@@ -94,4 +78,11 @@ func (c certManagerOciDNSComponent) postUninstall(ctx spi.ComponentContext) erro
 		return err
 	}
 	return nil
+}
+
+func getClusterResourceNamespace(cr *vzapi.Verrazzano) string {
+	if cr == nil || cr.Spec.Components.ClusterIssuer == nil {
+		return constants.CertManagerNamespace
+	}
+	return cr.Spec.Components.ClusterIssuer.ClusterResourceNamespace
 }

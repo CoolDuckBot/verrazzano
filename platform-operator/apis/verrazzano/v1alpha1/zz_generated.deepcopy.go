@@ -159,11 +159,6 @@ func (in *CertManagerComponent) DeepCopyInto(out *CertManagerComponent) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.Webhook != nil {
-		in, out := &in.Webhook, &out.Webhook
-		*out = new(CertManagerOCIDNSWebhookSolver)
-		(*in).DeepCopyInto(*out)
-	}
 	in.InstallOverrides.DeepCopyInto(&out.InstallOverrides)
 }
 

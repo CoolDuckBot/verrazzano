@@ -112,24 +112,36 @@ func IsCertManagerEnabled(cr runtime.Object) bool {
 	return true
 }
 
-// IsExternalCertManagerEnabled - Returns true IFF the ExternalCertManager component is explicitly enabled
-func IsExternalCertManagerEnabled(cr runtime.Object) bool {
+// IsClusterIssuerEnabled - Returns false only if the ClusterIssuerComponent is explicity disabled
+func IsClusterIssuerEnabled(cr runtime.Object) bool {
 	if vzv1alpha1, ok := cr.(*installv1alpha1.Verrazzano); ok {
-		if vzv1alpha1 != nil && vzv1alpha1.Spec.Components.ExternalCertManager != nil &&
-			vzv1alpha1.Spec.Components.ExternalCertManager.Enabled != nil {
-			return *vzv1alpha1.Spec.Components.ExternalCertManager.Enabled
+		if vzv1alpha1 != nil && vzv1alpha1.Spec.Components.ClusterIssuer != nil &&
+			vzv1alpha1.Spec.Components.ClusterIssuer.Enabled != nil {
+			return *vzv1alpha1.Spec.Components.ClusterIssuer.Enabled
 		}
 	} else if vzv1beta1, ok := cr.(*installv1beta1.Verrazzano); ok {
-		if vzv1beta1 != nil && vzv1beta1.Spec.Components.ExternalCertManager != nil &&
-			vzv1beta1.Spec.Components.ExternalCertManager.Enabled != nil {
-			return *vzv1beta1.Spec.Components.ExternalCertManager.Enabled
+		if vzv1beta1 != nil && vzv1beta1.Spec.Components.ClusterIssuer != nil &&
+			vzv1beta1.Spec.Components.ClusterIssuer.Enabled != nil {
+			return *vzv1beta1.Spec.Components.ClusterIssuer.Enabled
+		}
+	}
+	return true
+}
+
+// IsCertManagerOCIDNSWebhookEnabled - Returns true IFF the ExternalCertManager component is explicitly enabled
+func IsCertManagerOCIDNSWebhookEnabled(cr runtime.Object) bool {
+	if vzv1alpha1, ok := cr.(*installv1alpha1.Verrazzano); ok {
+		if vzv1alpha1 != nil && vzv1alpha1.Spec.Components.CertManagerOCIDNSWebhook != nil &&
+			vzv1alpha1.Spec.Components.CertManagerOCIDNSWebhook.Enabled != nil {
+			return *vzv1alpha1.Spec.Components.CertManagerOCIDNSWebhook.Enabled
+		}
+	} else if vzv1beta1, ok := cr.(*installv1beta1.Verrazzano); ok {
+		if vzv1beta1 != nil && vzv1beta1.Spec.Components.CertManagerOCIDNSWebhook != nil &&
+			vzv1beta1.Spec.Components.CertManagerOCIDNSWebhook.Enabled != nil {
+			return *vzv1beta1.Spec.Components.CertManagerOCIDNSWebhook.Enabled
 		}
 	}
 	return false
-}
-
-func IsAnyCertManagerEnabled(cr runtime.Object) bool {
-	return IsExternalCertManagerEnabled(cr) || IsCertManagerEnabled(cr)
 }
 
 // IsKialiEnabled - Returns false only if explicitly disabled in the CR
