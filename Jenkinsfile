@@ -131,6 +131,7 @@ pipeline {
             steps {
                 sh """
                     echo "${NODE_LABELS}"
+                    clusterctl version
                 """
 
                 script {
