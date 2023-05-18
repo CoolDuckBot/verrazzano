@@ -10,7 +10,7 @@ def VZ_BASE_IMAGE = ""
 def tarfilePrefix=""
 def storeLocation=""
 
-def agentLabel = env.JOB_NAME.contains('master') ? "phx-large" : "large"
+def agentLabel = env.JOB_NAME.contains('master') ? "phx-large" : "lhr-experimental"
 
 pipeline {
     options {
