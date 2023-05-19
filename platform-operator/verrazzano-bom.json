@@ -379,8 +379,8 @@
           "name": "mysql",
           "images": [
             {
-              "image": "mysql",
-              "tag": "8.0.29",
+              "image": "community-server",
+              "tag": "8.0.33",
               "helmFullImageKey": "image",
               "helmTagKey": "imageTag"
             }
