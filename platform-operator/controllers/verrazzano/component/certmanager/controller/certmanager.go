@@ -132,14 +132,21 @@ func AppendOverrides(compContext spi.ComponentContext, _ string, _ string, _ str
 	}
 
 	// Verify that we are using CA certs before appending override
-	isCAValue, err := cmcommon.IsCAConfig(compContext.EffectiveCR().Spec.Components.ClusterIssuer.Certificate)
+	//certConfig := compContext.EffectiveCR().Spec.Components.CertManager.Certificate
+	//resourceNamespace := compContext.EffectiveCR().Spec.Components.CertManager.Certificate.CA.ClusterResourceNamespace
+	clusterIssuerComponent := compContext.EffectiveCR().Spec.Components.ClusterIssuer
+	//if clusterIssuerComponent != nil {
+	//	certConfig = clusterIssuerComponent.Certificate
+	//	resourceNamespace = clusterIssuerComponent.ClusterResourceNamespace
+	//}
+
+	isCAValue, err := cmcommon.IsCAConfig(clusterIssuerComponent.Certificate)
 	if err != nil {
 		err = compContext.Log().ErrorfNewErr("Failed to verify the config type: %v", err)
 		return []bom.KeyValue{}, err
 	}
 	if isCAValue {
-		ns := compContext.EffectiveCR().Spec.Components.ClusterIssuer.ClusterResourceNamespace
-		kvs = append(kvs, bom.KeyValue{Key: clusterResourceNamespaceKey, Value: ns})
+		kvs = append(kvs, bom.KeyValue{Key: clusterResourceNamespaceKey, Value: clusterIssuerComponent.ClusterResourceNamespace})
 	}
 	return kvs, nil
 }

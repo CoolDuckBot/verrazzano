@@ -40,12 +40,22 @@ func ResetCoreV1ClientFunc() {
 
 // IsCA - Check if cert-type is CA, if not it is assumed to be Acme
 func IsCA(compContext spi.ComponentContext) (bool, error) {
-	componentSpec := compContext.EffectiveCR().Spec.Components
+	cr := compContext.EffectiveCR()
+	componentSpec := cr.Spec.Components
 	if componentSpec.ClusterIssuer != nil {
 		return checkExactlyOneIssuerConfiguration(componentSpec.ClusterIssuer.Certificate)
 	}
 	// If the stanza isn't present assume the Self-signed CA issuer config
 	return true, nil
+}
+
+// IsACMEConfig - Check if cert-type is ACME
+func IsACMEConfig(vz *v1beta1.Verrazzano) (bool, error) {
+	componentSpec := vz.Spec.Components
+	if componentSpec.ClusterIssuer != nil {
+		return checkExactlyOneIssuerConfigurationV1Beta1(componentSpec.ClusterIssuer.Certificate)
+	}
+	return false, nil
 }
 
 // ValidateLongestHostName - validates that the longest possible host name for a system endpoint
@@ -107,13 +117,28 @@ func getDNSSuffix(effectiveCR runtime.Object) (string, bool) {
 // - Validates the CA or ACME configurations if necessary
 // - returns an error if anything is misconfigured
 func ValidateConfiguration(vz *v1beta1.Verrazzano) (err error) {
-	issuerConfig := vz.Spec.Components.ClusterIssuer
-	if issuerConfig == nil {
-		return fmt.Errorf("Cluster issuer is not configured")
+	issuerComponent := vz.Spec.Components.ClusterIssuer
+	certManagerComponent := vz.Spec.Components.CertManager
+
+	if issuerComponent == nil && certManagerComponent == nil {
+		// we're relying on defaults
+		return nil
+	}
+
+	emptyCertConfig := v1beta1.Certificate{}
+	if issuerComponent != nil && certManagerComponent != nil && certManagerComponent.Certificate != emptyCertConfig {
+		return fmt.Errorf("Can not configure both the clusterIssuer or the CertManager certificate objects simultaneously")
+	}
+
+	var issuerConfig v1beta1.Certificate
+	if issuerComponent != nil {
+		issuerConfig = issuerComponent.Certificate
+	} else if certManagerComponent != nil {
+		issuerConfig = certManagerComponent.Certificate
 	}
 
 	// Check if Ca or Acme is empty
-	isCAConfig, err := checkExactlyOneIssuerConfigurationV1Beta1(issuerConfig.Certificate)
+	isCAConfig, err := checkExactlyOneIssuerConfigurationV1Beta1(issuerConfig)
 	if err != nil {
 		return err
 	}
@@ -125,7 +150,7 @@ func ValidateConfiguration(vz *v1beta1.Verrazzano) (err error) {
 		return nil
 	}
 	// Validate the ACME config otherwise
-	return validateAcmeConfiguration(issuerConfig.Acme)
+	return validateAcmeConfiguration(issuerComponent.Acme)
 }
 
 func checkExactlyOneIssuerConfiguration(certConfig vzapi.Certificate) (isCAConfig bool, err error) {

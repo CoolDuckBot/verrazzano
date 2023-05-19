@@ -4,6 +4,7 @@
 package ocidns
 
 import (
+	"fmt"
 	"github.com/verrazzano/verrazzano/pkg/constants"
 	"github.com/verrazzano/verrazzano/pkg/k8s/ready"
 	"github.com/verrazzano/verrazzano/pkg/vzcr"
@@ -127,4 +128,61 @@ func GetOverrides(object runtime.Object) interface{} {
 		return effectiveCR.Spec.Components.CertManagerOCIDNSWebhook.ValueOverrides
 	}
 	return []v1beta1.Overrides{}
+}
+
+// ValidateInstall checks if the specified new Verrazzano CR is valid for this component to be installed
+func (c certManagerOciDNSComponent) ValidateInstall(vz *vzapi.Verrazzano) error {
+	vzV1Beta1 := &v1beta1.Verrazzano{}
+	if err := vz.ConvertTo(vzV1Beta1); err != nil {
+		return err
+	}
+	return c.ValidateInstallV1Beta1(vzV1Beta1)
+}
+
+// ValidateInstallV1Beta1 checks if the specified new Verrazzano CR is valid for this component to be installed
+func (c certManagerOciDNSComponent) ValidateInstallV1Beta1(vz *v1beta1.Verrazzano) error {
+	if err := c.validateConfiguration(vz); err != nil {
+		return err
+	}
+	return c.HelmComponent.ValidateInstallV1Beta1(vz)
+}
+
+// ValidateUpdate checks if the specified new Verrazzano CR is valid for this component to be updated
+func (c certManagerOciDNSComponent) ValidateUpdate(old *vzapi.Verrazzano, new *vzapi.Verrazzano) error {
+	oldBeta := &v1beta1.Verrazzano{}
+	newBeta := &v1beta1.Verrazzano{}
+	if err := old.ConvertTo(oldBeta); err != nil {
+		return err
+	}
+	if err := new.ConvertTo(newBeta); err != nil {
+		return err
+	}
+
+	return c.ValidateUpdateV1Beta1(oldBeta, newBeta)
+}
+
+// ValidateUpdateV1Beta1 checks if the specified new Verrazzano CR is valid for this component to be updated
+func (c certManagerOciDNSComponent) ValidateUpdateV1Beta1(old *v1beta1.Verrazzano, new *v1beta1.Verrazzano) error {
+	if err := c.validateConfiguration(new); err != nil {
+		return err
+	}
+	return c.HelmComponent.ValidateUpdateV1Beta1(old, new)
+}
+
+func (c certManagerOciDNSComponent) validateConfiguration(new *v1beta1.Verrazzano) error {
+
+	if !c.IsEnabled(new) && !vzcr.IsCertManagerEnabled(new) {
+		return nil
+	}
+
+	acmeConfig, err := cmcommon.IsACMEConfig(new)
+	if err != nil {
+		return err
+	}
+
+	if !c.IsEnabled(new) && vzcr.IsOCIDNSEnabled(new) && acmeConfig {
+		return fmt.Errorf("the % component is required when using OCI DNS with an ACME certificate issuer configuration", ComponentJSONName)
+	}
+	
+	return nil
 }

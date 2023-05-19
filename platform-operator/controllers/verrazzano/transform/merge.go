@@ -89,6 +89,12 @@ func alignClusterIssuerConfigV1Beta1(effectiveCR *v1beta1.Verrazzano) {
 		},
 	}
 
+	// Ensure defaults.  Internally we will drive configuration from the ClusterIssuerComponent
+	// - if the ClusterIssuerComponent isn't set, set the defaults and align the CA configuration on the CertManager certificate config
+	// - validators should enforce that both are not set to non-default values
+	//
+	// For clients, this means that either the ClusterIssuerComponent or the CertManager component can be the source of truth, but not both
+	// - internally, the clusterIssuerConfig will be the source of truth
 	certManagerConfig := effectiveCR.Spec.Components.CertManager
 	if certManagerConfig.Certificate == emptyCertConfig {
 		certManagerConfig.Certificate = defaultCertConfig
@@ -96,16 +102,19 @@ func alignClusterIssuerConfigV1Beta1(effectiveCR *v1beta1.Verrazzano) {
 	clusterIssuerConfig := effectiveCR.Spec.Components.ClusterIssuer
 	if clusterIssuerConfig == nil {
 		trueVal := true
-		clusterIssuerConfig = &v1beta1.ClusterIssuerComponent{Enabled: &trueVal}
+		clusterIssuerConfig = &v1beta1.ClusterIssuerComponent{
+			Enabled:                  &trueVal,
+			ClusterResourceNamespace: constants.CertManagerNamespace,
+		}
 	}
 	// if Certificate in CertManager is empty/defaulted, align it with the ClusterIssuer config
 	if clusterIssuerConfig.Certificate == emptyCertConfig || clusterIssuerConfig.Certificate == defaultCertConfig {
 		clusterIssuerConfig.Certificate = certManagerConfig.Certificate
 	}
 	// if Certificate in ClusterIssuer is empty/defaulted, align it with the CertManager config
-	if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
-		certManagerConfig.Certificate = clusterIssuerConfig.Certificate
-	}
+	//if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
+	//	certManagerConfig.Certificate = clusterIssuerConfig.Certificate
+	//}
 }
 
 // alignClusterIssuerConfigV1Alpha1 aligns the ClusterIssuer configurations between CertManager and the newer ClusterIssuer
@@ -128,14 +137,17 @@ func alignClusterIssuerConfigV1Alpha1(effectiveCR *v1alpha1.Verrazzano) {
 	clusterIssuerConfig := effectiveCR.Spec.Components.ClusterIssuer
 	if clusterIssuerConfig == nil {
 		trueVal := true
-		clusterIssuerConfig = &v1alpha1.ClusterIssuerComponent{Enabled: &trueVal}
+		clusterIssuerConfig = &v1alpha1.ClusterIssuerComponent{
+			Enabled:                  &trueVal,
+			ClusterResourceNamespace: constants.CertManagerNamespace,
+		}
 	}
 	// if Certificate in CertManager is empty/defaulted, align it with the ClusterIssuer config
 	if clusterIssuerConfig.Certificate == emptyCertConfig || clusterIssuerConfig.Certificate == defaultCertConfig {
 		clusterIssuerConfig.Certificate = certManagerConfig.Certificate
 	}
 	// if Certificate in ClusterIssuer is empty/defaulted, align it with the CertManager config
-	if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
-		certManagerConfig.Certificate = clusterIssuerConfig.Certificate
-	}
+	//if certManagerConfig.Certificate == emptyCertConfig || certManagerConfig.Certificate == defaultCertConfig {
+	//	certManagerConfig.Certificate = clusterIssuerConfig.Certificate
+	//}
 }
