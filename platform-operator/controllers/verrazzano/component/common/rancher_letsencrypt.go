@@ -80,7 +80,7 @@ func ProcessAdditionalCertificates(log vzlog.VerrazzanoLogger, cli client.Client
 	if !vzcr.IsRancherEnabled(vz) {
 		return nil
 	}
-	cm := vz.Spec.Components.CertManager
+	cm := vz.Spec.Components.ClusterIssuer
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: CattleSystem,

@@ -194,6 +194,12 @@ func AppendComponentOverrides(actual, profile *v1alpha1.Verrazzano) {
 		actualCertManager.ValueOverrides = mergeOverrides(actualCertManager.ValueOverrides, profileCertManager.ValueOverrides)
 	}
 
+	actualOCIWebhook := actual.Spec.Components.CertManagerOCIDNSWebhook
+	profileOCIWebhook := profile.Spec.Components.CertManagerOCIDNSWebhook
+	if actualOCIWebhook != nil && profileOCIWebhook != nil {
+		actualOCIWebhook.ValueOverrides = mergeOverrides(actualOCIWebhook.ValueOverrides, profileOCIWebhook.ValueOverrides)
+	}
+
 	actualCoherenceOperator := actual.Spec.Components.CoherenceOperator
 	profileCoherenceOperator := profile.Spec.Components.CoherenceOperator
 	if actualCoherenceOperator != nil && profileCoherenceOperator != nil {

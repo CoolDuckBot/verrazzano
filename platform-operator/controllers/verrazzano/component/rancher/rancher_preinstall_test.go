@@ -106,7 +106,7 @@ func TestCopyDefaultCACertificate(t *testing.T) {
 func TestIsUsingDefaultCACertificate(t *testing.T) {
 	var tests = []struct {
 		testName string
-		*vzapi.CertManagerComponent
+		*vzapi.ClusterIssuerComponent
 		out bool
 	}{
 		{
@@ -116,19 +116,19 @@ func TestIsUsingDefaultCACertificate(t *testing.T) {
 		},
 		{
 			"acme CA",
-			vzAcmeDev.Spec.Components.CertManager,
+			vzAcmeDev.Spec.Components.ClusterIssuer,
 			false,
 		},
 		{
 			"private CA",
-			vzDefaultCA.Spec.Components.CertManager,
+			vzDefaultCA.Spec.Components.ClusterIssuer,
 			true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			assert.Equal(t, tt.out, isUsingDefaultCACertificate(tt.CertManagerComponent))
+			assert.Equal(t, tt.out, isUsingDefaultCACertificate(tt.ClusterIssuerComponent))
 		})
 	}
 }
